@@ -55,6 +55,7 @@ export interface BleState {
   secureContext: boolean
   availability: boolean | null
   connectionState: ConnectionState
+  reconnecting: boolean
   device: { id: string; name: string } | null
   services: ServiceInfo[]
   summary: DeviceSummary

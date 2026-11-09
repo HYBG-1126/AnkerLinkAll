@@ -30,6 +30,13 @@ const STORAGE_KEY = 'ankerlink.extraServiceUuids'
 const MAX_LOGS = 300
 const CONNECT_TIMEOUT_MS = 12000
 const DISCOVERY_TIMEOUT_MS = 15000
+const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 15000, 30000]
+const RECONNECT_MAX_ATTEMPTS = 20
+const RESCAN_TIMEOUT_MS = 25000
+
+export function isAnkerDeviceName(name: string): boolean {
+  return ANKER_NAME_PREFIXES.some((prefix) => name.startsWith(prefix))
+}
 
 function describeError(error: unknown): string {
   if (error instanceof DOMException) return `${error.name}：${error.message}`
@@ -103,6 +110,7 @@ export class BleManager {
     secureContext: typeof window !== 'undefined' && window.isSecureContext,
     availability: null,
     connectionState: 'idle',
+    reconnecting: false,
     device: null,
     services: [],
     summary: {},
@@ -124,6 +132,12 @@ export class BleManager {
   private ankerSession: AnkerSession | null = null
   private ankerNotify: BluetoothRemoteGATTCharacteristic | null = null
   private ankerNotifyHandler: EventListener | null = null
+  private connectedAt: number | null = null
+  private reconnectTimer: number | null = null
+  private reconnectTarget: BluetoothDevice | null = null
+  private reconnectAttempt = 0
+  private rescannedDevice: BluetoothDevice | null = null
+  private lastConnectFailure: string | null = null
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
@@ -152,16 +166,31 @@ export class BleManager {
     try {
       const devices = await navigator.bluetooth.getDevices()
       this.knownDeviceMap = new Map(devices.map((device) => [device.id, device]))
-      this.setState({
-        knownDevices: devices.map((device) => ({
-          id: device.id,
-          name: device.name ?? '未命名设备',
-          connected: device.gatt?.connected ?? false,
-        })),
-      })
+      const authorized = devices.map((device) => ({
+        id: device.id,
+        name: device.name ?? '未命名设备',
+        connected: device.gatt?.connected ?? false,
+      }))
+      const sessionOnly = this.state.knownDevices.filter(
+        (item) => !authorized.some((device) => device.id === item.id),
+      )
+      this.setState({ knownDevices: [...authorized, ...sessionOnly] })
     } catch (error) {
       this.log('warn', `读取已授权设备失败：${describeError(error)}`)
     }
+  }
+
+  private rememberDevice(device: BluetoothDevice, connected: boolean): void {
+    const name = device.name ?? '未命名设备'
+    this.knownDeviceMap.set(device.id, device)
+    const exists = this.state.knownDevices.some((item) => item.id === device.id)
+    this.setState({
+      knownDevices: exists
+        ? this.state.knownDevices.map((item) =>
+            item.id === device.id ? { ...item, name, connected } : item,
+          )
+        : [...this.state.knownDevices, { id: device.id, name, connected }],
+    })
   }
 
   async requestDevice(options: { acceptAllDevices: boolean }): Promise<void> {
@@ -174,6 +203,7 @@ export class BleManager {
       return
     }
 
+    this.cancelReconnect()
     const optionalServices = [...new Set([...STANDARD_SERVICE_UUIDS, ...this.state.extraServiceUuids])]
     this.setState({ busy: true, scanError: null, connectionError: null })
     this.log(
@@ -193,7 +223,7 @@ export class BleManager {
             ],
             optionalServices,
           })
-      this.knownDeviceMap.set(device.id, device)
+      this.rememberDevice(device, false)
       await this.connectDevice(device)
       await this.refreshKnownDevices()
     } catch (error) {
@@ -219,9 +249,14 @@ export class BleManager {
       this.log('error', '设备不在已授权列表中，请重新扫描')
       return
     }
+    this.cancelReconnect()
     this.setState({ busy: true, connectionError: null })
     try {
-      await this.connectDevice(device)
+      const connected = await this.connectWithRescan(device)
+      if (!connected && !this.device) {
+        this.log('error', this.lastConnectFailure ?? '无法连接充电器')
+        this.markIdle(device.id, this.lastConnectFailure ?? '无法连接充电器，请确认它已通电并在附近')
+      }
     } finally {
       this.setState({ busy: false })
       await this.refreshKnownDevices()
@@ -229,9 +264,18 @@ export class BleManager {
   }
 
   async disconnect(): Promise<void> {
+    const wasReconnecting = this.reconnectTarget !== null
+    this.cancelReconnect()
     const device = this.device
-    if (!device) return
+    if (!device) {
+      if (wasReconnecting) {
+        this.setState({ connectionState: 'idle', device: null, busy: false })
+        this.log('info', '已停止自动重连')
+      }
+      return
+    }
     device.removeEventListener('gattserverdisconnected', this.handleDisconnected)
+    this.connectedAt = null
     this.cleanupConnection()
     try {
       device.gatt?.disconnect()
@@ -246,6 +290,7 @@ export class BleManager {
       busy: false,
       connectionError: null,
       anker: createInitialAnkerState(),
+      knownDevices: this.state.knownDevices.map((item) => ({ ...item, connected: false })),
     })
     this.log('info', `已断开 ${device.name ?? device.id}`)
     await this.refreshKnownDevices()
@@ -254,15 +299,18 @@ export class BleManager {
   async forgetDevice(deviceId: string): Promise<void> {
     const device = this.knownDeviceMap.get(deviceId)
     if (!device) return
-    if (this.device?.id === deviceId) await this.disconnect()
+    if (this.device?.id === deviceId || this.reconnectTarget?.id === deviceId) await this.disconnect()
     try {
       await device.forget()
-      this.knownDeviceMap.delete(deviceId)
-      this.log('info', `已移除授权设备 ${device.name ?? deviceId}`)
-      await this.refreshKnownDevices()
     } catch (error) {
-      this.log('error', `移除设备失败：${describeError(error)}`)
+      this.log('warn', `解除系统授权失败：${describeError(error)}`)
     }
+    this.knownDeviceMap.delete(deviceId)
+    this.setState({
+      knownDevices: this.state.knownDevices.filter((item) => item.id !== deviceId),
+    })
+    this.log('info', `已移除设备 ${device.name ?? deviceId}`)
+    await this.refreshKnownDevices()
   }
 
   async refreshServices(): Promise<void> {
@@ -468,8 +516,12 @@ export class BleManager {
     this.setState({ logs: [] })
   }
 
-  private async connectDevice(device: BluetoothDevice): Promise<void> {
-    if (this.device?.id === device.id && this.server?.connected) return
+  private async connectDevice(
+    device: BluetoothDevice,
+    reconnecting = false,
+    keepStateOnFailure = reconnecting,
+  ): Promise<boolean> {
+    if (this.device?.id === device.id && this.server?.connected) return true
     if (this.device) await this.disconnect()
 
     const name = device.name ?? device.id
@@ -480,29 +532,29 @@ export class BleManager {
       summary: {},
       connectionError: null,
     })
-    this.log('system', `正在连接 ${name} …`)
+    this.log('system', `正在${reconnecting ? '重新' : ''}连接 ${name} …`)
     device.addEventListener('gattserverdisconnected', this.handleDisconnected)
 
     try {
       const server = await this.openGatt(device)
       this.device = device
       this.server = server
+      this.connectedAt = Date.now()
+      this.rememberDevice(device, true)
       this.setState({ connectionState: 'connected', connectionError: null })
       this.log('success', `已连接 ${name}`)
     } catch (error) {
       device.removeEventListener('gattserverdisconnected', this.handleDisconnected)
       this.cleanupConnection()
       const message = describeConnectFailure(error)
-      this.setState({
-        connectionState: 'idle',
-        device: null,
-        services: [],
-        summary: {},
-        connectionError: message,
-        anker: createInitialAnkerState(),
-      })
+      this.lastConnectFailure = message
+      if (keepStateOnFailure) {
+        this.log('warn', `连接未成功：${describeError(error)}`)
+        return false
+      }
       this.log('error', message)
-      return
+      this.markIdle(device.id, message)
+      return false
     }
 
     try {
@@ -516,6 +568,7 @@ export class BleManager {
     })
 
     await this.startAnkerSession()
+    return true
   }
 
   private async openGatt(device: BluetoothDevice): Promise<BluetoothRemoteGATTServer> {
@@ -769,19 +822,134 @@ export class BleManager {
   }
 
   private handleDisconnected = (): void => {
-    const name = this.device?.name ?? '设备'
+    const device = this.device
+    const name = device?.name ?? '设备'
+    const lasted = this.connectedAt === null ? null : Math.round((Date.now() - this.connectedAt) / 1000)
+    this.connectedAt = null
+    device?.removeEventListener('gattserverdisconnected', this.handleDisconnected)
     this.cleanupConnection()
+    this.log('warn', lasted === null ? `${name} 已断开连接` : `${name} 已断开连接（保持 ${lasted} 秒）`)
+
+    if (!device) {
+      this.setState({
+        connectionState: 'idle',
+        device: null,
+        services: [],
+        summary: {},
+        busy: false,
+        connectionError: null,
+        anker: createInitialAnkerState(),
+        knownDevices: this.state.knownDevices.map((item) => ({ ...item, connected: false })),
+      })
+      return
+    }
+
+    // 只有稳定连接过一段时间才重置退避，避免设备反复秒断时无限快速重试
+    if (lasted !== null && lasted >= 30) this.reconnectAttempt = 0
     this.setState({
-      connectionState: 'idle',
-      device: null,
+      connectionState: 'connecting',
+      device: { id: device.id, name: device.name ?? device.id },
       services: [],
       summary: {},
       busy: false,
       connectionError: null,
       anker: createInitialAnkerState(),
-      knownDevices: this.state.knownDevices.map((device) => ({ ...device, connected: false })),
+      knownDevices: this.state.knownDevices.map((item) => ({ ...item, connected: false })),
     })
-    this.log('warn', `${name} 已断开连接`)
+    this.scheduleReconnect(device)
+  }
+
+  private scheduleReconnect(device: BluetoothDevice): void {
+    if (this.reconnectAttempt >= RECONNECT_MAX_ATTEMPTS) {
+      this.cancelReconnect()
+      this.setState({
+        connectionState: 'idle',
+        device: null,
+        connectionError: '与充电器的连接已断开，自动重连未成功。请确认充电器在附近，然后点击蓝牙按钮重新连接。',
+      })
+      this.log('error', '自动重连多次失败，已停止重试')
+      return
+    }
+    const delay = RECONNECT_DELAYS_MS[Math.min(this.reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)]
+    this.reconnectAttempt += 1
+    this.reconnectTarget = device
+    if (!this.state.reconnecting) this.setState({ reconnecting: true })
+    const attempt = this.reconnectAttempt
+    this.log('info', `${delay / 1000} 秒后自动重连（第 ${attempt} 次）`)
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = null
+      void this.connectWithRescan(device, true).then((connected) => {
+        if (this.reconnectTarget?.id !== device.id) return
+        if (connected) {
+          if (this.reconnectTimer === null) {
+            this.reconnectTarget = null
+            this.setState({ reconnecting: false })
+          }
+          return
+        }
+        this.setState({ connectionState: 'connecting', device: { id: device.id, name: device.name ?? device.id } })
+        this.scheduleReconnect(device)
+      })
+    }, delay)
+  }
+
+  // Chromium 会丢弃约 3 分钟未收到广播的设备，此后 gatt.connect() 直接报 out of range，需重新扫描拿到新句柄
+  private async connectWithRescan(device: BluetoothDevice, reconnecting = false): Promise<boolean> {
+    if (await this.connectDevice(device, reconnecting, true)) return true
+    const desktop = window.ankerDesktop
+    if (!desktop?.rescanBluetooth || !device.name) return false
+    if (reconnecting && this.reconnectTarget?.id !== device.id) return false
+
+    this.log('info', '正在重新扫描充电器广播…')
+    this.rescannedDevice = null
+    const found = await withTimeout(
+      desktop.rescanBluetooth(device.id, device.name),
+      RESCAN_TIMEOUT_MS,
+      '重新扫描超时',
+    ).catch(() => false)
+    const fresh = this.rescannedDevice as BluetoothDevice | null
+    this.rescannedDevice = null
+    if (!found || !fresh) {
+      this.log('warn', '本次未扫描到充电器广播')
+      return false
+    }
+    if (reconnecting && this.reconnectTarget?.id !== device.id) return false
+    this.knownDeviceMap.set(fresh.id, fresh)
+    return await this.connectDevice(fresh, reconnecting, true)
+  }
+
+  handleRescanRequest(deviceId: string): Promise<boolean> {
+    const optionalServices = [...new Set([...STANDARD_SERVICE_UUIDS, ...this.state.extraServiceUuids])]
+    return navigator.bluetooth
+      .requestDevice({ acceptAllDevices: true, optionalServices })
+      .then((device) => {
+        if (device.id !== deviceId) return false
+        this.rescannedDevice = device
+        return true
+      })
+      .catch(() => false)
+  }
+
+  private markIdle(deviceId: string, message: string): void {
+    this.setState({
+      connectionState: 'idle',
+      device: null,
+      services: [],
+      summary: {},
+      connectionError: message,
+      anker: createInitialAnkerState(),
+      knownDevices: this.state.knownDevices.map((item) =>
+        item.id === deviceId ? { ...item, connected: false } : item,
+      ),
+    })
+  }
+
+  private cancelReconnect(): void {
+    if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer)
+    this.reconnectTimer = null
+    this.reconnectTarget = null
+    this.reconnectAttempt = 0
+    if (this.state.reconnecting) this.setState({ reconnecting: false })
   }
 
   private key(serviceUuid: string, characteristicUuid: string): string {
@@ -811,3 +979,7 @@ export class BleManager {
 }
 
 export const bleManager = new BleManager()
+
+if (typeof window !== 'undefined') {
+  window.__ankerRescan = (deviceId) => bleManager.handleRescanRequest(deviceId)
+}

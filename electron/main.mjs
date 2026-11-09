@@ -15,6 +15,7 @@ let bluetoothDialogOpen = false
 let pickerWindow = null
 let chooseBluetoothDevice = null
 let cancelBluetoothPicker = null
+let rescanBluetoothDevice = null
 
 const gotLock = app.requestSingleInstanceLock()
 
@@ -90,6 +91,7 @@ function createPanel() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      backgroundThrottling: false,
     },
   })
 
@@ -261,8 +263,6 @@ function attachBluetoothPicker(win) {
     pendingDevices = []
     pickerReady = false
     bluetoothDialogOpen = false
-    chooseBluetoothDevice = null
-    cancelBluetoothPicker = null
 
     const picker = pickerWindow
     pickerWindow = null
@@ -312,16 +312,78 @@ function attachBluetoothPicker(win) {
   }
 
   chooseBluetoothDevice = (deviceId) => {
+    if (!pendingCallback) return
     const selected = pendingDevices.find((device) => device.deviceId === deviceId)
-    if (!selected) return
+    if (!selected) {
+      console.log(`[bluetooth] 选择的设备 ${deviceId} 不在当前列表中`)
+      return
+    }
+    console.log(`[bluetooth] 已选择 ${selected.name}`)
     finish(deviceId)
     showPanel()
   }
 
-  cancelBluetoothPicker = () => finish('')
+  cancelBluetoothPicker = () => {
+    if (pendingCallback) finish('')
+  }
+
+  const RESCAN_TIMEOUT_MS = 15000
+  let autoSelect = null
+
+  const finishAutoSelect = (deviceId) => {
+    if (!autoSelect) return
+    clearTimeout(autoSelect.timer)
+    const callback = autoSelect.callback
+    if (!callback) {
+      autoSelect.expired = true
+      return
+    }
+    autoSelect = null
+    callback(deviceId)
+  }
+
+  // 后台重新扫描指定设备：不弹选择器，目标出现即自动选中。选择器里的 deviceId 与网页侧 device.id 不同，只能按名称匹配
+  rescanBluetoothDevice = async (deviceId, deviceName) => {
+    if (pendingCallback || autoSelect || win.isDestroyed() || !deviceName) return false
+    autoSelect = {
+      deviceName,
+      callback: null,
+      expired: false,
+      timer: setTimeout(() => finishAutoSelect(''), RESCAN_TIMEOUT_MS),
+    }
+    console.log(`[bluetooth] 后台重新扫描 ${deviceName}`)
+    try {
+      const found = await win.webContents.executeJavaScript(
+        `window.__ankerRescan ? window.__ankerRescan(${JSON.stringify(deviceId)}) : false`,
+        true,
+      )
+      console.log(`[bluetooth] 后台扫描${found ? '已找到' : '未找到'}目标设备`)
+      return found === true
+    } catch {
+      return false
+    } finally {
+      if (autoSelect) {
+        clearTimeout(autoSelect.timer)
+        const callback = autoSelect.callback
+        autoSelect = null
+        callback?.('')
+      }
+    }
+  }
 
   win.webContents.on('select-bluetooth-device', (event, deviceList, callback) => {
     event.preventDefault()
+
+    if (autoSelect) {
+      autoSelect.callback = callback
+      const target = deviceList.find((device) => device.deviceName === autoSelect.deviceName)
+      if (target) {
+        finishAutoSelect(target.deviceId)
+      } else if (autoSelect.expired) {
+        finishAutoSelect('')
+      }
+      return
+    }
 
     if (Date.now() < ignoreUntil) {
       callback('')
@@ -353,4 +415,9 @@ function registerIpc() {
     if (typeof deviceId === 'string') chooseBluetoothDevice?.(deviceId)
   })
   ipcMain.on('bt:cancel', () => cancelBluetoothPicker?.())
+  ipcMain.handle('bt:rescan', (_event, deviceId, deviceName) =>
+    typeof deviceId === 'string' && typeof deviceName === 'string' && rescanBluetoothDevice
+      ? rescanBluetoothDevice(deviceId, deviceName)
+      : false,
+  )
 }

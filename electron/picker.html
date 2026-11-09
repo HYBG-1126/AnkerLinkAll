@@ -61,6 +61,21 @@
         box-shadow: 0 0 0 3px rgba(22, 195, 221, 0.14);
       }
 
+      .filter-row {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        color: #5a6d7e;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .filter-row input {
+        margin: 0;
+        accent-color: #16c3dd;
+      }
+
       #list {
         display: flex;
         flex: 1;
@@ -146,6 +161,10 @@
     </header>
 
     <input id="search" type="search" placeholder="搜索设备名称或地址" autocomplete="off" spellcheck="false" />
+    <label class="filter-row" for="showUnnamed">
+      <input id="showUnnamed" type="checkbox" />
+      <span id="unnamedLabel">显示未命名设备</span>
+    </label>
     <div id="list"></div>
     <footer>
       <button id="cancel" type="button">取消</button>
@@ -156,6 +175,8 @@
       const hint = document.getElementById('hint')
       const search = document.getElementById('search')
       const cancel = document.getElementById('cancel')
+      const showUnnamed = document.getElementById('showUnnamed')
+      const unnamedLabel = document.getElementById('unnamedLabel')
 
       let devices = []
       let scanning = true
@@ -163,11 +184,20 @@
       const isAnker = (name) =>
         /anker|soundcore|eufy|nebula|ankermake|a2687|prime|ashd/i.test(name)
 
+      const isUnnamed = (name) => !name || /^未知/.test(name)
+
       function render() {
         const query = search.value.trim().toLowerCase()
-        const filtered = devices.filter((device) =>
+        const unnamedCount = devices.filter((device) => isUnnamed(device.name)).length
+        unnamedLabel.textContent = unnamedCount > 0 ? `显示未命名设备 (${unnamedCount})` : '显示未命名设备'
+
+        const byQuery = devices.filter((device) =>
           `${device.name} ${device.deviceId}`.toLowerCase().includes(query),
         )
+        const hideUnnamed = query === '' && !showUnnamed.checked
+        const filtered = hideUnnamed
+          ? byQuery.filter((device) => !isUnnamed(device.name))
+          : byQuery
 
         if (devices.length > 0) {
           hint.textContent = scanning ? `已发现 ${devices.length} 个设备` : `已发现 ${devices.length} 个设备 · 扫描结束`
@@ -179,12 +209,18 @@
         if (filtered.length === 0) {
           const empty = document.createElement('p')
           empty.className = 'empty'
-          empty.textContent =
-            devices.length > 0
-              ? '没有匹配的设备'
-              : scanning
-                ? '暂未发现设备，请确认充电器已通电且蓝牙已开启。列表会持续更新。'
-                : '未发现附近的蓝牙设备，请确认设备已通电、蓝牙已开启且在附近后重试。'
+          if (devices.length > 0) {
+            empty.textContent =
+              query !== ''
+                ? '没有匹配的设备'
+                : unnamedCount > 0
+                  ? `有 ${unnamedCount} 个未命名设备已隐藏，可勾选上方选项显示。`
+                  : '没有匹配的设备'
+          } else {
+            empty.textContent = scanning
+              ? '暂未发现设备，请确认充电器已通电且蓝牙已开启。列表会持续更新。'
+              : '未发现附近的蓝牙设备，请确认设备已通电、蓝牙已开启且在附近后重试。'
+          }
           list.append(empty)
           return
         }
@@ -219,6 +255,7 @@
       })
 
       search.addEventListener('input', render)
+      showUnnamed.addEventListener('change', render)
       cancel.addEventListener('click', () => window.picker.cancel())
       window.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') window.picker.cancel()

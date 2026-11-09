@@ -13,6 +13,8 @@ export const ANKER_LOGIN_ID_HEX =
 
 export const ANKER_PORTS: readonly AnkerPortId[] = ['C1', 'C2', 'C3']
 
+export const ANKER_MODEL_NAME = 'Anker Prime 160W'
+
 const PORT_INDEX: Record<AnkerPortId, number> = { C1: 0, C2: 1, C3: 2 }
 
 export const ANKER_COMMAND = {
@@ -56,6 +58,7 @@ export type AnkerPhase = 'idle' | 'unsupported' | 'handshaking' | 'ready' | 'err
 export interface AnkerState {
   phase: AnkerPhase
   message: string
+  productName: string | null
   serial: string | null
   firmware: string | null
   mac: string | null
@@ -83,6 +86,7 @@ export function createInitialAnkerState(): AnkerState {
   return {
     phase: 'idle',
     message: '尚未连接安克设备',
+    productName: null,
     serial: null,
     firmware: null,
     mac: null,
@@ -202,11 +206,10 @@ export function parseFrame(frame: Uint8Array): ParsedFrame | null {
   if (total < 10) return null
   const payload = frame.slice(4, total - 1)
   if (payload.length < 5) return null
-  const high = payload[3]
-  const low = payload[4]
-  const encrypted = (high & 0x40) !== 0
-  const ack = (high & 0x08) !== 0
-  const command = ((high & ~(0x40 | 0x08)) << 8) | low
+  const flag = (payload[3] << 8) | payload[4]
+  const encrypted = (flag & 0x4000) !== 0
+  const ack = (flag & 0x0800) !== 0
+  const command = flag & 0x37ff
   return { payload, command, encrypted, ack }
 }
 
@@ -435,6 +438,7 @@ export const SETTING_COMMANDS: Record<AnkerSettingKind, number> = {
 }
 
 export interface DeviceIdentity {
+  productName: string | null
   serial: string | null
   firmware: string | null
   mac: string | null
@@ -443,13 +447,16 @@ export interface DeviceIdentity {
 export function extractIdentity(payload: Uint8Array): DeviceIdentity {
   let offset = tlvOffset(payload)
   if (payload.length > 5 && payload[0] === 0x03 && payload[1] === 0x00) offset = 6
-  const identity: DeviceIdentity = { serial: null, firmware: null, mac: null }
+  const identity: DeviceIdentity = { productName: null, serial: null, firmware: null, mac: null }
   const looksLikeFirmware = (text: string) => /^v?\d+(?:\.\d+){1,5}$/i.test(text) || /^v\d/i.test(text)
   const looksLikeSerial = (text: string) => /^[A-Z0-9_-]{10,30}$/i.test(text) && !looksLikeFirmware(text)
   const looksLikeMac = (text: string) => /^([0-9A-F]{2}[:-]){5}[0-9A-F]{2}$/i.test(text)
+  const looksLikeProductName = (text: string) =>
+    text.length >= 3 && text.length <= 40 && /anker|prime|a2687/i.test(text)
 
   for (const tlv of parseTlv(payload, offset)) {
     const text = bytesToAscii(tlv.value).replace(/\s+/g, ' ').trim()
+    if (tlv.type === 0xa2 && looksLikeProductName(text)) identity.productName = text
     if (tlv.type === 0xa3 && looksLikeFirmware(text)) identity.firmware = text
     if (tlv.type === 0xa4 && looksLikeSerial(text)) identity.serial = text
     if (tlv.type === 0xa5 && tlv.value.length >= 6) {
@@ -458,6 +465,7 @@ export function extractIdentity(payload: Uint8Array): DeviceIdentity {
         .join(':')
       if (mac !== '00:00:00:00:00:00') identity.mac = mac
     }
+    if (!identity.productName && looksLikeProductName(text)) identity.productName = text
     if (!identity.firmware && looksLikeFirmware(text)) identity.firmware = text
     if (!identity.serial && looksLikeSerial(text)) identity.serial = text
     if (!identity.mac && looksLikeMac(text)) identity.mac = text.replace(/-/g, ':').toUpperCase()

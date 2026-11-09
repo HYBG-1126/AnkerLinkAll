@@ -26,8 +26,7 @@ import {
 } from './protocol'
 
 const HANDSHAKE_TIMEOUT_MS = 6000
-const REALTIME_POLL_MS = 5000
-const STATUS_POLL_MS = 15000
+const HEARTBEAT_MS = 6000
 
 interface SessionHooks {
   write: (packet: Uint8Array) => Promise<void>
@@ -67,9 +66,12 @@ export class AnkerSession {
   private writeChain: Promise<void> = Promise.resolve()
   private processChain: Promise<void> = Promise.resolve()
   private pollTimers: number[] = []
+  private heartbeatTick = 0
   private ports = emptyPorts()
   private totalPower: number | null = null
   private chargingMode: number | null = null
+  private readonly seenCommands = new Set<string>()
+  private readonly seenWrites = new Set<string>()
 
   constructor(hooks: SessionHooks) {
     this.hooks = hooks
@@ -126,6 +128,7 @@ export class AnkerSession {
       if (infoResponse) {
         const identity = extractIdentity(infoResponse)
         this.hooks.onUpdate(identity)
+        if (identity.productName) this.hooks.log('info', `A2687：设备型号 ${identity.productName}`)
         if (identity.serial) this.hooks.log('info', `A2687：设备序列号 ${identity.serial}`)
       }
       await delay(100)
@@ -188,6 +191,9 @@ export class AnkerSession {
       this.hooks.onUpdate({ phase: 'ready', message: '安克会话已建立，正在读取实时数据' })
       this.hooks.log('success', 'A2687：安全会话建立完成，开始接收真实遥测')
 
+      await this.requestStatus().catch((error) => {
+        this.hooks.log('warn', `A2687：状态请求失败：${describeError(error)}`)
+      })
       await this.requestTelemetry().catch((error) => {
         this.hooks.log('warn', `A2687：首次遥测请求失败：${describeError(error)}`)
       })
@@ -290,17 +296,18 @@ export class AnkerSession {
 
   private startPolling(): void {
     this.stopPolling()
+    this.heartbeatTick = 0
     this.pollTimers.push(
       window.setInterval(() => {
+        if (!this.ready) return
+        this.heartbeatTick += 1
         void this.requestTelemetry().catch((error) => {
-          this.hooks.log('warn', `A2687：实时数据轮询失败：${describeError(error)}`)
+          this.hooks.log('warn', `A2687：心跳遥测失败：${describeError(error)}`)
         })
-      }, REALTIME_POLL_MS),
-    )
-    this.pollTimers.push(
-      window.setInterval(() => {
-        void this.requestStatus().catch(() => undefined)
-      }, STATUS_POLL_MS),
+        if (this.heartbeatTick % 2 === 0) {
+          void this.requestStatus().catch(() => undefined)
+        }
+      }, HEARTBEAT_MS),
     )
   }
 
@@ -398,6 +405,14 @@ export class AnkerSession {
     payload.set(cipher, 5)
     const frame = buildFrame(payload)
 
+    if (!this.seenWrites.has(`${group}:${command}`)) {
+      this.seenWrites.add(`${group}:${command}`)
+      this.hooks.log(
+        'info',
+        `A2687：发送 0x${command.toString(16).padStart(4, '0')}（group 0x${group.toString(16).padStart(2, '0')}，${frame.length} 字节）`,
+      )
+    }
+
     const response = expectResponse
       ? this.armResponse(command, timeoutMs, acceptAnyResponse)
       : null
@@ -453,13 +468,34 @@ export class AnkerSession {
   private async processNotification(bytes: Uint8Array): Promise<void> {
     if (this.stopped) return
     const parsed = parseFrame(bytes)
-    if (!parsed || !parsed.encrypted || !this.key) return
+    if (!parsed) return
+
+    const commandKey = `${parsed.command.toString(16)}:${parsed.encrypted ? 'enc' : 'plain'}`
+    const firstSeen = !this.seenCommands.has(commandKey)
+    if (firstSeen) {
+      this.seenCommands.add(commandKey)
+      this.hooks.log(
+        'info',
+        `A2687：收到 0x${parsed.command.toString(16).padStart(4, '0')}（${parsed.payload.length} 字节，${parsed.encrypted ? '加密' : '明文'}）`,
+      )
+    }
 
     let plain: Uint8Array
-    try {
-      plain = await this.decrypt(parsed.payload.slice(5))
-    } catch {
-      return
+    if (parsed.encrypted) {
+      if (!this.key) return
+      try {
+        plain = await this.decrypt(parsed.payload.slice(5))
+      } catch {
+        if (firstSeen) {
+          this.hooks.log(
+            'warn',
+            `A2687：0x${parsed.command.toString(16).padStart(4, '0')} 解密失败，会话密钥可能已失效`,
+          )
+        }
+        return
+      }
+    } else {
+      plain = parsed.payload.slice(5)
     }
 
     if (
@@ -478,6 +514,7 @@ export class AnkerSession {
 
   private applyTelemetry(command: number, plain: Uint8Array): void {
     const relevant =
+      command === 0x0300 ||
       command === ANKER_COMMAND.realtime ||
       command === ANKER_COMMAND.status ||
       command === ANKER_COMMAND.fixedAllocation ||

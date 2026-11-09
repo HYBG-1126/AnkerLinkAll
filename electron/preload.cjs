@@ -4,4 +4,5 @@ contextBridge.exposeInMainWorld('ankerDesktop', {
   platform: process.platform,
   electronVersion: process.versions.electron,
   hidePanel: () => ipcRenderer.send('panel:hide'),
+  rescanBluetooth: (deviceId, deviceName) => ipcRenderer.invoke('bt:rescan', deviceId, deviceName),
 })

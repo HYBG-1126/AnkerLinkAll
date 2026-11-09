@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import productImage from '../assets/device-160w.png'
+import productImage from '../assets/device-160w-empty.png'
+import { DeviceCables } from '../components/DeviceCables'
 import { DetailHeader } from '../components/PageHeader'
 import { Sparkline } from '../components/Sparkline'
 import { OptionSheet } from '../components/Sheet'
@@ -23,6 +24,7 @@ import {
   useDeviceSettings,
 } from '../hooks/useDeviceSettings'
 import type { AnkerPortTelemetry } from '../lib/anker/protocol'
+import { isAnkerDeviceName } from '../lib/ble/manager'
 import type { PortId } from '../lib/deviceData'
 
 const TIMER_OPTIONS = ['关闭', '15 分钟', '30 分钟', '1 小时', '2 小时'] as const
@@ -90,7 +92,13 @@ export function DevicePage() {
       toast('蓝牙已连接')
       return
     }
-    const known = state.knownDevices.find((device) => !device.connected) ?? state.knownDevices[0]
+    if (state.reconnecting) {
+      toast('正在自动重连充电器…')
+      return
+    }
+    const known =
+      state.knownDevices.find((device) => !device.connected && isAnkerDeviceName(device.name)) ??
+      state.knownDevices.find((device) => isAnkerDeviceName(device.name))
     if (known) {
       toast(`正在连接 ${known.name} …`)
       void manager.connect(known.id)
@@ -144,6 +152,7 @@ export function DevicePage() {
   }
 
   const footnote = (() => {
+    if (!connected && state.reconnecting) return '与充电器的连接中断，正在自动重连…'
     if (!connected) return state.connectionError ?? '连接安克 A2687 充电器后，这里会显示真实的端口功率、电压与电流。'
     if (anker.phase === 'handshaking') return anker.message
     if (anker.phase === 'error' || anker.phase === 'unsupported') return anker.message
@@ -169,7 +178,10 @@ export function DevicePage() {
 
       <section className="device-hero">
         {connected ? (
-          <img src={productImage} alt={displayName} className="hero-product" />
+          <div className="hero-stage">
+            <img src={productImage} alt={displayName} className="hero-product" />
+            <DeviceCables activePorts={ports.filter(isPlugged).map((port) => port.id)} />
+          </div>
         ) : (
           <div className="hero-empty">
             <BluetoothBadgeIcon size={30} />
@@ -286,7 +298,7 @@ export function DevicePage() {
             </div>
             <div>
               <span>设备信息</span>
-              <span>—</span>
+              <span>{profile.model}</span>
             </div>
           </div>
         </div>
