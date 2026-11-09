@@ -96,7 +96,7 @@ export function DevicePage() {
       void manager.connect(known.id)
       return
     }
-    void manager.requestDevice({ acceptAllDevices: false })
+    void manager.requestDevice({ acceptAllDevices: true })
   }
 
   const toggleTimer = () => {

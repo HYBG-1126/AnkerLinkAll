@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>选择蓝牙设备</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+        color: #16232f;
+        background: #f2f6fa;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        margin: 0;
+        padding: 20px;
+        gap: 12px;
+      }
+
+      header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 19px;
+        font-weight: 700;
+      }
+
+      #hint {
+        margin: 0;
+        font-size: 12px;
+        color: #6d7f90;
+        white-space: nowrap;
+      }
+
+      #search {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 13px;
+        color: inherit;
+        background: #ffffff;
+        border: 1px solid #dbe5ee;
+        border-radius: 11px;
+        outline: none;
+      }
+
+      #search:focus {
+        border-color: #16c3dd;
+        box-shadow: 0 0 0 3px rgba(22, 195, 221, 0.14);
+      }
+
+      #list {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 0;
+        overflow-y: auto;
+      }
+
+      .device {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        width: 100%;
+        padding: 11px 13px;
+        text-align: left;
+        background: #ffffff;
+        border: 1px solid #e4ecf4;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: border-color 0.12s ease, transform 0.12s ease;
+      }
+
+      .device:hover {
+        border-color: #9fdde8;
+      }
+
+      .device:active {
+        transform: scale(0.99);
+      }
+
+      .device-name {
+        overflow: hidden;
+        font-size: 13px;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .device-id {
+        font-size: 11px;
+        color: #7b8b9b;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .device.is-anker .device-name {
+        color: #0b93a8;
+      }
+
+      .empty {
+        padding: 24px 12px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #6d7f90;
+        text-align: center;
+      }
+
+      footer {
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      #cancel {
+        padding: 9px 18px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #4c6072;
+        background: #ffffff;
+        border: 1px solid #dbe5ee;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+
+      #cancel:hover {
+        background: #f6fafc;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>选择蓝牙设备</h1>
+      <p id="hint">正在扫描…</p>
+    </header>
+
+    <input id="search" type="search" placeholder="搜索设备名称或地址" autocomplete="off" spellcheck="false" />
+    <div id="list"></div>
+    <footer>
+      <button id="cancel" type="button">取消</button>
+    </footer>
+
+    <script>
+      const list = document.getElementById('list')
+      const hint = document.getElementById('hint')
+      const search = document.getElementById('search')
+      const cancel = document.getElementById('cancel')
+
+      let devices = []
+
+      const isAnker = (name) =>
+        /anker|soundcore|eufy|nebula|ankermake|a2687|prime/i.test(name)
+
+      function render() {
+        const query = search.value.trim().toLowerCase()
+        const filtered = devices.filter((device) =>
+          `${device.name} ${device.deviceId}`.toLowerCase().includes(query),
+        )
+
+        hint.textContent = devices.length > 0 ? `已发现 ${devices.length} 个设备` : '正在扫描…'
+        list.replaceChildren()
+
+        if (filtered.length === 0) {
+          const empty = document.createElement('p')
+          empty.className = 'empty'
+          empty.textContent =
+            devices.length > 0
+              ? '没有匹配的设备'
+              : '暂未发现设备，请确认充电器已通电且蓝牙已开启。列表会持续更新。'
+          list.append(empty)
+          return
+        }
+
+        for (const device of filtered) {
+          const button = document.createElement('button')
+          button.type = 'button'
+          button.className = `device${isAnker(device.name) ? ' is-anker' : ''}`
+
+          const name = document.createElement('span')
+          name.className = 'device-name'
+          name.textContent = device.name
+
+          const id = document.createElement('span')
+          id.className = 'device-id'
+          id.textContent = device.deviceId
+
+          button.append(name, id)
+          button.addEventListener('click', () => window.picker.select(device.deviceId))
+          list.append(button)
+        }
+      }
+
+      window.picker.onDevices((next) => {
+        devices = next
+        render()
+      })
+
+      search.addEventListener('input', render)
+      cancel.addEventListener('click', () => window.picker.cancel())
+      window.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') window.picker.cancel()
+      })
+
+      render()
+    </script>
+  </body>
+</html>

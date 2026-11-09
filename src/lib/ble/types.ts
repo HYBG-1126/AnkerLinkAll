@@ -62,6 +62,7 @@ export interface BleState {
   extraServiceUuids: string[]
   logs: LogEntry[]
   busy: boolean
+  scanError: string | null
   anker: AnkerState
 }
 

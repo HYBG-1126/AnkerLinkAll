@@ -9,7 +9,7 @@ export function DevicesPage() {
   const navigate = useNavigate()
 
   const handleScan = () => {
-    void manager.requestDevice({ acceptAllDevices: false })
+    void manager.requestDevice({ acceptAllDevices: true })
   }
 
   const openKnownDevice = (deviceId: string) => {
@@ -40,6 +40,8 @@ export function DevicesPage() {
           当前环境不支持 Web Bluetooth，无法扫描设备。在 macOS 客户端中可使用真实蓝牙。
         </div>
       )}
+
+      {state.scanError !== null && <div className="notice">{state.scanError}</div>}
 
       <div className="device-card-list">
         {state.knownDevices.map((device) => (

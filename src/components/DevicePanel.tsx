@@ -12,7 +12,7 @@ interface DevicePanelProps {
 }
 
 export function DevicePanel({ state, manager, advancedOpen = false }: DevicePanelProps) {
-  const [acceptAllDevices, setAcceptAllDevices] = useState(false)
+  const [acceptAllDevices, setAcceptAllDevices] = useState(true)
   const [serviceUuid, setServiceUuid] = useState('')
   const canScan = state.supported && state.secureContext && !state.busy
 

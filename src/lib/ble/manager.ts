@@ -72,6 +72,7 @@ export class BleManager {
     extraServiceUuids: loadStoredServices(),
     logs: [],
     busy: false,
+    scanError: null,
     anker: createInitialAnkerState(),
   }
 
@@ -135,7 +136,7 @@ export class BleManager {
     }
 
     const optionalServices = [...new Set([...STANDARD_SERVICE_UUIDS, ...this.state.extraServiceUuids])]
-    this.setState({ busy: true })
+    this.setState({ busy: true, scanError: null })
     this.log(
       'system',
       options.acceptAllDevices
@@ -158,9 +159,14 @@ export class BleManager {
       await this.refreshKnownDevices()
     } catch (error) {
       if (error instanceof DOMException && error.name === 'NotFoundError') {
-        this.log('warn', '已取消设备选择')
+        this.log('warn', '已取消设备选择或未发现匹配设备')
+        this.setState({
+          scanError: '未发现匹配的安克设备，或已取消选择。可尝试扫描全部蓝牙设备。',
+        })
       } else {
-        this.log('error', `扫描失败：${describeError(error)}`)
+        const message = describeError(error)
+        this.log('error', `扫描失败：${message}`)
+        this.setState({ scanError: `扫描失败：${message}` })
       }
     } finally {
       this.setState({ busy: false })

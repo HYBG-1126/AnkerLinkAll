@@ -12,6 +12,9 @@ let tray = null
 let panel = null
 let quitting = false
 let bluetoothDialogOpen = false
+let pickerWindow = null
+let chooseBluetoothDevice = null
+let cancelBluetoothPicker = null
 
 const gotLock = app.requestSingleInstanceLock()
 
@@ -40,6 +43,26 @@ function registerPermissions() {
   const allowed = new Set(['bluetooth', 'clipboard-sanitized-write'])
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(allowed.has(permission))
+  })
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) =>
+    allowed.has(permission),
+  )
+  session.defaultSession.setBluetoothPairingHandler((details, callback) => {
+    void dialog
+      .showMessageBox({
+        type: 'question',
+        title: '蓝牙配对',
+        message: `请求与 ${details.deviceId} 配对`,
+        detail: '允许后系统可能会要求输入配对码。',
+        buttons: ['允许', '取消'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      })
+      .then(({ response }) =>
+        callback({ confirmed: response === 0 && details.pairingKind !== 'providePin' }),
+      )
+      .catch(() => callback({ confirmed: false }))
   })
 }
 
@@ -159,44 +182,139 @@ function showAbout() {
 }
 
 function attachBluetoothPicker(win) {
+  let pendingCallback = null
+  let pendingDevices = []
+  let pickerReady = false
+  let updateTimer = null
+  let lastLoggedCount = -1
+
+  const rankName = (name) => {
+    if (/anker|soundcore|eufy|nebula|ankermake|a2687|prime/i.test(name)) return 0
+    if (/^未知或不支持/.test(name)) return 2
+    return 1
+  }
+
+  const sortDevices = (deviceList) => {
+    const seen = new Set()
+    const devices = []
+    for (const device of deviceList) {
+      if (!device?.deviceId || seen.has(device.deviceId)) continue
+      seen.add(device.deviceId)
+      devices.push({
+        deviceId: device.deviceId,
+        name: device.deviceName || `未知设备 (${device.deviceId})`,
+      })
+    }
+    return devices.sort(
+      (a, b) => rankName(a.name) - rankName(b.name) || a.name.localeCompare(b.name, 'zh-Hans'),
+    )
+  }
+
+  const sendDevices = () => {
+    if (!pickerReady || !pickerWindow || pickerWindow.isDestroyed()) return
+    pickerWindow.webContents.send('bt:devices', pendingDevices)
+  }
+
+  const scheduleUpdate = () => {
+    if (updateTimer) return
+    updateTimer = setTimeout(() => {
+      updateTimer = null
+      sendDevices()
+    }, 250)
+  }
+
+  const finish = (deviceId) => {
+    if (updateTimer) clearTimeout(updateTimer)
+    updateTimer = null
+    const callback = pendingCallback
+    pendingCallback = null
+    pendingDevices = []
+    pickerReady = false
+    bluetoothDialogOpen = false
+    chooseBluetoothDevice = null
+    cancelBluetoothPicker = null
+
+    const picker = pickerWindow
+    pickerWindow = null
+    if (picker && !picker.isDestroyed()) picker.destroy()
+    if (callback) callback(deviceId)
+  }
+
+  const ensurePicker = () => {
+    if (pickerWindow && !pickerWindow.isDestroyed()) return pickerWindow
+
+    pickerReady = false
+    pickerWindow = new BrowserWindow({
+      width: 430,
+      height: 580,
+      parent: win,
+      modal: true,
+      show: false,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      title: '选择蓝牙设备',
+      backgroundColor: '#f2f6fa',
+      webPreferences: {
+        preload: path.join(__dirname, 'picker-preload.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+      },
+    })
+
+    pickerWindow.once('ready-to-show', () => {
+      pickerWindow?.show()
+      pickerWindow?.focus()
+    })
+    pickerWindow.webContents.on('did-finish-load', () => {
+      pickerReady = true
+      sendDevices()
+    })
+    pickerWindow.on('closed', () => {
+      pickerWindow = null
+      pickerReady = false
+      if (pendingCallback) finish('')
+    })
+
+    void pickerWindow.loadFile(path.join(__dirname, 'picker.html'))
+    return pickerWindow
+  }
+
+  chooseBluetoothDevice = (deviceId) => {
+    const selected = pendingDevices.find((device) => device.deviceId === deviceId)
+    if (!selected) return
+    finish(deviceId)
+    showPanel()
+  }
+
+  cancelBluetoothPicker = () => finish('')
+
   win.webContents.on('select-bluetooth-device', (event, deviceList, callback) => {
     event.preventDefault()
 
-    if (deviceList.length === 0) {
-      callback('')
-      return
-    }
-    if (bluetoothDialogOpen) return
-
+    pendingCallback = callback
+    pendingDevices = sortDevices(deviceList)
     bluetoothDialogOpen = true
-    const buttons = deviceList.map(
-      (device, index) => `${index + 1}. ${device.deviceName || '未命名设备'}`,
-    )
 
-    dialog
-      .showMessageBox(win, {
-        type: 'question',
-        title: '选择蓝牙设备',
-        message: '发现附近的蓝牙设备',
-        detail: '请选择要连接的设备。列表在扫描期间可能持续更新。',
-        buttons: [...buttons, '取消'],
-        defaultId: 0,
-        cancelId: buttons.length,
-        noLink: true,
-      })
-      .then(({ response }) => {
-        bluetoothDialogOpen = false
-        const selected = deviceList[response]
-        callback(selected ? selected.deviceId : '')
-        if (selected) showPanel()
-      })
-      .catch(() => {
-        bluetoothDialogOpen = false
-        callback('')
-      })
+    if (pendingDevices.length !== lastLoggedCount) {
+      lastLoggedCount = pendingDevices.length
+      console.log(`[bluetooth] 发现 ${pendingDevices.length} 个设备`)
+    }
+
+    ensurePicker()
+    scheduleUpdate()
+  })
+
+  win.on('closed', () => {
+    if (pendingCallback) finish('')
   })
 }
 
 function registerIpc() {
   ipcMain.on('panel:hide', () => panel?.hide())
+  ipcMain.on('bt:select', (_event, deviceId) => {
+    if (typeof deviceId === 'string') chooseBluetoothDevice?.(deviceId)
+  })
+  ipcMain.on('bt:cancel', () => cancelBluetoothPicker?.())
 }

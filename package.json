@@ -45,6 +45,8 @@
       "dist/**/*",
       "electron/main.mjs",
       "electron/preload.cjs",
+      "electron/picker.html",
+      "electron/picker-preload.cjs",
       "electron/assets/trayTemplate.png",
       "electron/assets/trayTemplate@2x.png",
       "package.json",
