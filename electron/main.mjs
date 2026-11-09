@@ -182,10 +182,13 @@ function showAbout() {
 }
 
 function attachBluetoothPicker(win) {
+  const SCAN_TIMEOUT_MS = 20000
   let pendingCallback = null
   let pendingDevices = []
   let pickerReady = false
   let updateTimer = null
+  let scanTimer = null
+  let ignoreUntil = 0
   let lastLoggedCount = -1
 
   const rankName = (name) => {
@@ -223,9 +226,36 @@ function attachBluetoothPicker(win) {
     }, 250)
   }
 
+  const sendScanState = (scanning) => {
+    if (!pickerWindow || pickerWindow.isDestroyed()) return
+    pickerWindow.webContents.send('bt:scan-state', { scanning })
+  }
+
+  const stopScanTimer = () => {
+    if (scanTimer) clearTimeout(scanTimer)
+    scanTimer = null
+  }
+
+  const startScanTimer = () => {
+    stopScanTimer()
+    scanTimer = setTimeout(() => {
+      scanTimer = null
+      if (!pendingCallback) return
+      if (pendingDevices.length === 0) {
+        console.log(`[bluetooth] ${SCAN_TIMEOUT_MS / 1000} 秒内未发现设备，停止扫描`)
+        finish('')
+        return
+      }
+      sendScanState(false)
+    }, SCAN_TIMEOUT_MS)
+  }
+
   const finish = (deviceId) => {
+    stopScanTimer()
     if (updateTimer) clearTimeout(updateTimer)
     updateTimer = null
+    ignoreUntil = Date.now() + 800
+    lastLoggedCount = -1
     const callback = pendingCallback
     pendingCallback = null
     pendingDevices = []
@@ -293,6 +323,12 @@ function attachBluetoothPicker(win) {
   win.webContents.on('select-bluetooth-device', (event, deviceList, callback) => {
     event.preventDefault()
 
+    if (Date.now() < ignoreUntil) {
+      callback('')
+      return
+    }
+
+    if (!pendingCallback) startScanTimer()
     pendingCallback = callback
     pendingDevices = sortDevices(deviceList)
     bluetoothDialogOpen = true

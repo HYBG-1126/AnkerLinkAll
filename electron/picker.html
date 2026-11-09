@@ -158,9 +158,10 @@
       const cancel = document.getElementById('cancel')
 
       let devices = []
+      let scanning = true
 
       const isAnker = (name) =>
-        /anker|soundcore|eufy|nebula|ankermake|a2687|prime/i.test(name)
+        /anker|soundcore|eufy|nebula|ankermake|a2687|prime|ashd/i.test(name)
 
       function render() {
         const query = search.value.trim().toLowerCase()
@@ -168,7 +169,11 @@
           `${device.name} ${device.deviceId}`.toLowerCase().includes(query),
         )
 
-        hint.textContent = devices.length > 0 ? `已发现 ${devices.length} 个设备` : '正在扫描…'
+        if (devices.length > 0) {
+          hint.textContent = scanning ? `已发现 ${devices.length} 个设备` : `已发现 ${devices.length} 个设备 · 扫描结束`
+        } else {
+          hint.textContent = scanning ? '正在扫描…' : '未发现设备'
+        }
         list.replaceChildren()
 
         if (filtered.length === 0) {
@@ -177,7 +182,9 @@
           empty.textContent =
             devices.length > 0
               ? '没有匹配的设备'
-              : '暂未发现设备，请确认充电器已通电且蓝牙已开启。列表会持续更新。'
+              : scanning
+                ? '暂未发现设备，请确认充电器已通电且蓝牙已开启。列表会持续更新。'
+                : '未发现附近的蓝牙设备，请确认设备已通电、蓝牙已开启且在附近后重试。'
           list.append(empty)
           return
         }
@@ -203,6 +210,11 @@
 
       window.picker.onDevices((next) => {
         devices = next
+        render()
+      })
+
+      window.picker.onScanState((state) => {
+        scanning = Boolean(state?.scanning)
         render()
       })
 

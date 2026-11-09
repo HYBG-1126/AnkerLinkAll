@@ -198,9 +198,10 @@ export class BleManager {
       await this.refreshKnownDevices()
     } catch (error) {
       if (error instanceof DOMException && error.name === 'NotFoundError') {
-        this.log('warn', '已取消设备选择或未发现匹配设备')
+        this.log('warn', '未发现设备，或已取消选择')
         this.setState({
-          scanError: '未发现匹配的安克设备，或已取消选择。可尝试扫描全部蓝牙设备。',
+          scanError:
+            '未发现附近的蓝牙设备，或已取消选择。请确认充电器已通电、蓝牙已开启且在附近，然后重新扫描。',
         })
       } else {
         const message = describeError(error)
