@@ -14,6 +14,15 @@ import type {
   ServiceInfo,
   WriteMode,
 } from './types'
+import type { AnkerPortId, AnkerSettingKind, AnkerState } from '../anker/protocol'
+import {
+  ANKER_ADVERTISED_SERVICE_UUID,
+  ANKER_NOTIFY_UUID,
+  ANKER_SERVICE_UUID,
+  ANKER_WRITE_UUID,
+  createInitialAnkerState,
+} from '../anker/protocol'
+import { AnkerSession } from '../anker/session'
 import { bytesToText, toHex } from '../format'
 import { isValidUuid, normalizeUuid, shortUuid } from '../uuid'
 
@@ -63,6 +72,7 @@ export class BleManager {
     extraServiceUuids: loadStoredServices(),
     logs: [],
     busy: false,
+    anker: createInitialAnkerState(),
   }
 
   private listeners = new Set<() => void>()
@@ -71,6 +81,9 @@ export class BleManager {
   private knownDeviceMap = new Map<string, BluetoothDevice>()
   private characteristicMap = new Map<string, BluetoothRemoteGATTCharacteristic>()
   private notificationHandlers = new Map<string, EventListener>()
+  private ankerSession: AnkerSession | null = null
+  private ankerNotify: BluetoothRemoteGATTCharacteristic | null = null
+  private ankerNotifyHandler: EventListener | null = null
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
@@ -134,7 +147,10 @@ export class BleManager {
       const device = options.acceptAllDevices
         ? await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices })
         : await navigator.bluetooth.requestDevice({
-            filters: ANKER_NAME_PREFIXES.map((namePrefix) => ({ namePrefix })),
+            filters: [
+              { services: [ANKER_ADVERTISED_SERVICE_UUID] },
+              ...ANKER_NAME_PREFIXES.map((namePrefix) => ({ namePrefix })),
+            ],
             optionalServices,
           })
       this.knownDeviceMap.set(device.id, device)
@@ -176,7 +192,14 @@ export class BleManager {
     } catch {
       // 断开时设备可能已离线，忽略异常
     }
-    this.setState({ connectionState: 'idle', device: null, services: [], summary: {}, busy: false })
+    this.setState({
+      connectionState: 'idle',
+      device: null,
+      services: [],
+      summary: {},
+      busy: false,
+      anker: createInitialAnkerState(),
+    })
     this.log('info', `已断开 ${device.name ?? device.id}`)
     await this.refreshKnownDevices()
   }
@@ -256,6 +279,72 @@ export class BleManager {
     } catch (error) {
       this.log('error', `写入失败：${describeError(error)}`)
       return false
+    }
+  }
+
+  async setAnkerPortPower(port: AnkerPortId, on: boolean): Promise<boolean> {
+    if (!this.ankerSession?.ready) {
+      this.log('warn', '安克会话尚未就绪，无法控制端口')
+      return false
+    }
+    try {
+      await this.ankerSession.setPortPower(port, on)
+      return true
+    } catch (error) {
+      this.log('error', `端口控制失败：${describeError(error)}`)
+      return false
+    }
+  }
+
+  async setAnkerPortTimer(port: AnkerPortId, seconds: number): Promise<boolean> {
+    if (!this.ankerSession?.ready) {
+      this.log('warn', '安克会话尚未就绪，无法设置定时')
+      return false
+    }
+    try {
+      await this.ankerSession.setPortTimer(port, seconds)
+      return true
+    } catch (error) {
+      this.log('error', `定时设置失败：${describeError(error)}`)
+      return false
+    }
+  }
+
+  async setAnkerChargingMode(mode: 0 | 1 | 4): Promise<boolean> {
+    if (!this.ankerSession?.ready) {
+      this.log('warn', '安克会话尚未就绪，无法切换充电模式')
+      return false
+    }
+    try {
+      await this.ankerSession.setChargingMode(mode)
+      return true
+    } catch (error) {
+      this.log('error', `充电模式切换失败：${describeError(error)}`)
+      return false
+    }
+  }
+
+  async setAnkerSetting(kind: AnkerSettingKind, value: number): Promise<boolean> {
+    if (!this.ankerSession?.ready) {
+      this.log('warn', '安克会话尚未就绪，无法下发设置')
+      return false
+    }
+    try {
+      await this.ankerSession.setSetting(kind, value)
+      return true
+    } catch (error) {
+      this.log('error', `设置下发失败：${describeError(error)}`)
+      return false
+    }
+  }
+
+  async refreshAnkerTelemetry(): Promise<void> {
+    if (!this.ankerSession?.ready) return
+    try {
+      await this.ankerSession.requestTelemetry()
+      await this.ankerSession.requestStatus()
+    } catch (error) {
+      this.log('warn', `刷新遥测失败：${describeError(error)}`)
     }
   }
 
@@ -354,12 +443,106 @@ export class BleManager {
       this.log('success', `已连接 ${device.name ?? device.id}`)
       await this.discoverServices()
       await this.readSummary()
+      await this.startAnkerSession()
     } catch (error) {
       device.removeEventListener('gattserverdisconnected', this.handleDisconnected)
       this.cleanupConnection()
-      this.setState({ connectionState: 'idle', device: null, services: [], summary: {} })
+      this.setState({
+        connectionState: 'idle',
+        device: null,
+        services: [],
+        summary: {},
+        anker: createInitialAnkerState(),
+      })
       this.log('error', `连接失败：${describeError(error)}`)
     }
+  }
+
+  private async startAnkerSession(): Promise<void> {
+    this.stopAnkerSession()
+    const server = this.server
+    if (!server) return
+
+    let service: BluetoothRemoteGATTService
+    try {
+      service = await server.getPrimaryService(ANKER_SERVICE_UUID)
+    } catch {
+      this.setState({
+        anker: {
+          ...createInitialAnkerState(),
+          phase: 'unsupported',
+          message: '该设备未提供 A2687 私有服务，仅支持标准 GATT 调试',
+        },
+      })
+      return
+    }
+
+    try {
+      const write = await service.getCharacteristic(ANKER_WRITE_UUID)
+      const notify = await service.getCharacteristic(ANKER_NOTIFY_UUID)
+      await notify.startNotifications()
+
+      const session = new AnkerSession({
+        write: async (packet) => {
+          const bytes = new Uint8Array(packet)
+          if (write.properties.writeWithoutResponse) {
+            await write.writeValueWithoutResponse(bytes)
+          } else {
+            await write.writeValueWithResponse(bytes)
+          }
+        },
+        onUpdate: (patch) => this.applyAnkerPatch(patch),
+        log: (level, message) => this.log(level, message),
+      })
+
+      const handler: EventListener = () => {
+        const view = notify.value
+        if (!view) return
+        this.ankerSession?.handleNotification(this.copyView(view))
+      }
+
+      this.ankerSession = session
+      this.ankerNotify = notify
+      this.ankerNotifyHandler = handler
+      notify.addEventListener('characteristicvaluechanged', handler)
+      this.setState({
+        anker: {
+          ...createInitialAnkerState(),
+          phase: 'handshaking',
+          message: '正在建立安克安全会话…',
+        },
+      })
+      void session.start()
+    } catch (error) {
+      this.setState({
+        anker: {
+          ...createInitialAnkerState(),
+          phase: 'error',
+          message: `安克服务初始化失败：${describeError(error)}`,
+          error: describeError(error),
+        },
+      })
+      this.log('error', `安克服务初始化失败：${describeError(error)}`)
+    }
+  }
+
+  private stopAnkerSession(): void {
+    if (this.ankerNotify && this.ankerNotifyHandler) {
+      this.ankerNotify.removeEventListener('characteristicvaluechanged', this.ankerNotifyHandler)
+    }
+    this.ankerNotify = null
+    this.ankerNotifyHandler = null
+    this.ankerSession?.stop()
+    this.ankerSession = null
+  }
+
+  private applyAnkerPatch(patch: Partial<AnkerState>): void {
+    const previous = this.state.anker
+    const next: AnkerState = { ...previous, ...patch }
+    if (patch.totalPower !== undefined && patch.totalPower !== null && patch.lastUpdatedAt !== undefined) {
+      next.history = [...previous.history, patch.totalPower].slice(-48)
+    }
+    this.setState({ anker: next })
   }
 
   private async discoverServices(): Promise<void> {
@@ -468,6 +651,7 @@ export class BleManager {
   }
 
   private cleanupConnection(): void {
+    this.stopAnkerSession()
     this.characteristicMap.clear()
     this.notificationHandlers.clear()
     this.device = null
@@ -482,6 +666,7 @@ export class BleManager {
       device: null,
       services: [],
       summary: {},
+      anker: createInitialAnkerState(),
       knownDevices: this.state.knownDevices.map((device) => ({ ...device, connected: false })),
     })
     this.log('warn', `${name} 已断开连接`)

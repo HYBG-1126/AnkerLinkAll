@@ -9,6 +9,8 @@ import { useBle } from '../hooks/useBle'
 import { useCurrentDeviceProfile } from '../hooks/useCurrentDeviceProfile'
 import {
   CHARGING_MODES,
+  CHARGING_MODE_LABELS,
+  CHARGING_MODE_VALUES,
   ROTATION_OPTIONS,
   SCREEN_OFF_OPTIONS,
   SCREENSAVER_OPTIONS,
@@ -31,30 +33,74 @@ export function DeviceSettingsPage() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [nameDraft, setNameDraft] = useState(settings.name)
 
+  const sessionReady = connected && state.anker.phase === 'ready'
+  const liveMode =
+    state.anker.chargingMode !== null ? CHARGING_MODE_LABELS[state.anker.chargingMode] : null
+
+  const applyMode = (value: string) => {
+    const mode = CHARGING_MODE_VALUES[value]
+    if (mode === undefined) return
+    if (!sessionReady) {
+      toast('设备未连接，充电模式未下发')
+      return
+    }
+    void manager.setAnkerChargingMode(mode).then((ok) => {
+      if (ok) update({ chargingMode: value })
+      toast(ok ? `充电模式已切换为 ${value}` : '充电模式下发失败')
+    })
+  }
+
+  const applyIndexSetting = (
+    kind: 'screenTimeout' | 'screenDirection',
+    options: readonly string[],
+    value: string,
+    onSuccess: () => void,
+  ) => {
+    const index = options.indexOf(value)
+    if (index < 0) return
+    if (!sessionReady) {
+      toast('设备未连接，设置未下发')
+      return
+    }
+    void manager.setAnkerSetting(kind, index).then((ok) => {
+      if (ok) onSuccess()
+      toast(ok ? '设置已下发' : '设置下发失败')
+    })
+  }
+
   const optionConfig = {
     mode: {
       title: '充电模式',
       options: CHARGING_MODES,
-      value: settings.chargingMode,
-      onSelect: (value: string) => update({ chargingMode: value }),
+      value: liveMode ?? settings.chargingMode,
+      onSelect: applyMode,
     },
     screenOff: {
       title: '熄屏时间',
       options: SCREEN_OFF_OPTIONS,
       value: settings.screenOff,
-      onSelect: (value: string) => update({ screenOff: value }),
+      onSelect: (value: string) =>
+        applyIndexSetting('screenTimeout', SCREEN_OFF_OPTIONS, value, () =>
+          update({ screenOff: value }),
+        ),
     },
     rotation: {
       title: '屏幕旋转',
       options: ROTATION_OPTIONS,
       value: settings.rotation,
-      onSelect: (value: string) => update({ rotation: value }),
+      onSelect: (value: string) =>
+        applyIndexSetting('screenDirection', ROTATION_OPTIONS, value, () =>
+          update({ rotation: value }),
+        ),
     },
     screensaver: {
       title: '屏保设置',
       options: SCREENSAVER_OPTIONS,
       value: settings.screensaver,
-      onSelect: (value: string) => update({ screensaver: value }),
+      onSelect: (value: string) => {
+        update({ screensaver: value })
+        toast('屏保设置仅保存在本机')
+      },
     },
   } as const
 
@@ -102,7 +148,7 @@ export function DeviceSettingsPage() {
         <ListRow
           label="充电模式"
           icon={<PowerIcon />}
-          value={settings.chargingMode}
+          value={liveMode ?? settings.chargingMode}
           onClick={() => setOption('mode')}
         />
         <ListRow
@@ -190,7 +236,20 @@ export function DeviceSettingsPage() {
             onChange={(event) => update({ brightness: Number(event.target.value) })}
           />
         </div>
-        <button type="button" className="sheet-primary" onClick={() => setBrightnessOpen(false)}>
+        <button
+          type="button"
+          className="sheet-primary"
+          onClick={() => {
+            if (!sessionReady) {
+              toast('设备未连接，亮度设置未下发')
+              return
+            }
+            void manager.setAnkerSetting('brightness', settings.brightness).then((ok) => {
+              if (ok) setBrightnessOpen(false)
+              toast(ok ? '屏幕亮度已下发' : '屏幕亮度下发失败')
+            })
+          }}
+        >
           完成
         </button>
       </Sheet>

@@ -13,18 +13,28 @@ export interface DeviceSettings {
   portTimer: Record<PortId, boolean>
 }
 
-export const CHARGING_MODES = ['AI模式2.0', '智能模式', '标准模式'] as const
-export const SCREEN_OFF_OPTIONS = ['15秒', '30秒', '1分钟', '5分钟'] as const
-export const ROTATION_OPTIONS = ['向上', '向左', '向右'] as const
+export const CHARGING_MODES = ['AI 模式', '标准模式'] as const
+export const CHARGING_MODE_VALUES: Record<string, 0 | 1 | 4> = {
+  'AI 模式': 0,
+  标准模式: 1,
+  自定义模式: 4,
+}
+export const CHARGING_MODE_LABELS: Record<number, string> = {
+  0: 'AI 模式',
+  1: '标准模式',
+  4: '自定义模式',
+}
+export const SCREEN_OFF_OPTIONS = ['30秒', '1分钟', '5分钟', '30分钟', '12小时'] as const
+export const ROTATION_OPTIONS = ['向上', '向左', '向下', '向右'] as const
 export const SCREENSAVER_OPTIONS = ['关闭', '时钟', '星空'] as const
 
 const DEFAULTS: DeviceSettings = {
   name: DEMO_DEVICE.name,
   chargingMode: CHARGING_MODES[0],
   brightness: 65,
-  screenOff: '30秒',
-  rotation: '向上',
-  screensaver: '关闭',
+  screenOff: SCREEN_OFF_OPTIONS[0],
+  rotation: ROTATION_OPTIONS[0],
+  screensaver: SCREENSAVER_OPTIONS[0],
   portPower: { C1: true, C2: false, C3: false },
   portTimer: { C1: false, C2: false, C3: false },
 }
@@ -37,6 +47,10 @@ function cloneDefaults(): DeviceSettings {
   }
 }
 
+function oneOf<T extends string>(options: readonly T[], value: unknown, fallback: T): T {
+  return typeof value === 'string' && (options as readonly string[]).includes(value) ? (value as T) : fallback
+}
+
 function load(storageKey: string): DeviceSettings {
   try {
     const raw = localStorage.getItem(storageKey)
@@ -45,6 +59,14 @@ function load(storageKey: string): DeviceSettings {
     return {
       ...cloneDefaults(),
       ...parsed,
+      chargingMode: oneOf(CHARGING_MODES, parsed.chargingMode, DEFAULTS.chargingMode),
+      screenOff: oneOf(SCREEN_OFF_OPTIONS, parsed.screenOff, DEFAULTS.screenOff),
+      rotation: oneOf(ROTATION_OPTIONS, parsed.rotation, DEFAULTS.rotation),
+      screensaver: oneOf(SCREENSAVER_OPTIONS, parsed.screensaver, DEFAULTS.screensaver),
+      brightness:
+        typeof parsed.brightness === 'number' && parsed.brightness >= 10 && parsed.brightness <= 100
+          ? parsed.brightness
+          : DEFAULTS.brightness,
       portPower: { ...DEFAULTS.portPower, ...parsed.portPower },
       portTimer: { ...DEFAULTS.portTimer, ...parsed.portTimer },
     }

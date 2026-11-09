@@ -47,7 +47,9 @@
       "electron/preload.cjs",
       "electron/assets/trayTemplate.png",
       "electron/assets/trayTemplate@2x.png",
-      "package.json"
+      "package.json",
+      "!**/*.baiduyun.*",
+      "!**/.DS_Store"
     ],
     "mac": {
       "category": "public.app-category.utilities",

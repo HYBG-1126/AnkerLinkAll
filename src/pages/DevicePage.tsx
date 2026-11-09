@@ -16,9 +16,56 @@ import {
 } from '../components/icons'
 import { useBle } from '../hooks/useBle'
 import { useCurrentDeviceProfile } from '../hooks/useCurrentDeviceProfile'
-import { CHARGING_MODES, useDeviceSettings } from '../hooks/useDeviceSettings'
-import { useTelemetry } from '../hooks/useTelemetry'
+import {
+  CHARGING_MODES,
+  CHARGING_MODE_LABELS,
+  CHARGING_MODE_VALUES,
+  useDeviceSettings,
+} from '../hooks/useDeviceSettings'
+import type { AnkerPortTelemetry } from '../lib/anker/protocol'
 import type { PortId } from '../lib/deviceData'
+
+const TIMER_OPTIONS = ['关闭', '15 分钟', '30 分钟', '1 小时', '2 小时'] as const
+const TIMER_SECONDS: Record<string, number> = {
+  关闭: 0,
+  '15 分钟': 15 * 60,
+  '30 分钟': 30 * 60,
+  '1 小时': 60 * 60,
+  '2 小时': 2 * 60 * 60,
+}
+
+function formatWatts(value: number | null): string {
+  return value === null ? '--' : value.toFixed(1)
+}
+
+function formatVoltage(value: number | null): string {
+  return value === null ? '--V' : `${value.toFixed(1)}V`
+}
+
+function formatCurrent(value: number | null): string {
+  return value === null ? '--A' : `${value.toFixed(2)}A`
+}
+
+function isPlugged(port: AnkerPortTelemetry): boolean {
+  if (port.cableCode !== null) return !port.cableCode.startsWith('03')
+  return (port.power ?? 0) > 0.2
+}
+
+function statusChip(phase: string, connected: boolean): string {
+  if (!connected) return '未连接'
+  switch (phase) {
+    case 'ready':
+      return '实时'
+    case 'handshaking':
+      return '握手中'
+    case 'error':
+      return '协议异常'
+    case 'unsupported':
+      return '标准 GATT'
+    default:
+      return '未就绪'
+  }
+}
 
 export function DevicePage() {
   const navigate = useNavigate()
@@ -26,12 +73,17 @@ export function DevicePage() {
   const { state, manager } = useBle()
   const { connected, deviceKey, profile } = useCurrentDeviceProfile()
   const { settings, update } = useDeviceSettings(deviceKey)
-  const { ports, history, totalPower } = useTelemetry(settings.portPower)
   const [selectedPort, setSelectedPort] = useState<PortId>('C1')
   const [modeOpen, setModeOpen] = useState(false)
+  const [timerOpen, setTimerOpen] = useState(false)
 
+  const anker = state.anker
+  const ports = anker.ports
   const currentPort = ports.find((port) => port.id === selectedPort) ?? ports[0]
   const displayName = connected ? profile.name : settings.name
+  const sessionReady = connected && anker.phase === 'ready'
+  const chip = statusChip(anker.phase, connected)
+  const liveMode = anker.chargingMode !== null ? CHARGING_MODE_LABELS[anker.chargingMode] : null
 
   const handleBluetooth = () => {
     if (connected) {
@@ -48,20 +100,56 @@ export function DevicePage() {
   }
 
   const toggleTimer = () => {
-    const next = !settings.portTimer[selectedPort]
-    update({ portTimer: { ...settings.portTimer, [selectedPort]: next } })
-    toast(`${selectedPort} 定时${next ? '已开启' : '已关闭'}`)
+    if (!sessionReady) {
+      toast('请先连接充电器并等待安克会话建立')
+      return
+    }
+    setTimerOpen(true)
+  }
+
+  const applyTimer = (option: string) => {
+    const seconds = TIMER_SECONDS[option] ?? 0
+    void manager.setAnkerPortTimer(selectedPort, seconds).then((ok) => {
+      if (!ok) {
+        toast('定时指令发送失败')
+        return
+      }
+      update({ portTimer: { ...settings.portTimer, [selectedPort]: seconds > 0 } })
+      toast(seconds > 0 ? `${selectedPort} 定时${option}` : `${selectedPort} 定时已关闭`)
+    })
   }
 
   const togglePower = () => {
-    if (!currentPort.plugged) {
-      toast(`${selectedPort} 未检测到线缆`)
+    if (!sessionReady) {
+      toast('请先连接充电器并等待安克会话建立')
       return
     }
-    const next = !settings.portPower[selectedPort]
-    update({ portPower: { ...settings.portPower, [selectedPort]: next } })
-    toast(`${selectedPort} 输出已${next ? '开启' : '关闭'}`)
+    const next = !currentPort.outputOn
+    void manager.setAnkerPortPower(selectedPort, next).then((ok) => {
+      toast(ok ? `${selectedPort} 输出已${next ? '开启' : '关闭'}` : '端口指令发送失败')
+    })
   }
+
+  const applyMode = (mode: string) => {
+    const value = CHARGING_MODE_VALUES[mode]
+    if (value === undefined) return
+    if (!sessionReady) {
+      toast('请先连接充电器并等待安克会话建立')
+      return
+    }
+    void manager.setAnkerChargingMode(value).then((ok) => {
+      if (ok) update({ chargingMode: mode })
+      toast(ok ? `已切换为 ${mode}` : '充电模式指令发送失败')
+    })
+  }
+
+  const footnote = (() => {
+    if (!connected) return '连接安克 A2687 充电器后，这里会显示真实的端口功率、电压与电流。'
+    if (anker.phase === 'handshaking') return anker.message
+    if (anker.phase === 'error' || anker.phase === 'unsupported') return anker.message
+    if (anker.phase === 'ready' && anker.lastUpdatedAt === null) return '会话已建立，等待设备上报遥测数据…'
+    return null
+  })()
 
   return (
     <div className="page device-page">
@@ -87,7 +175,7 @@ export function DevicePage() {
         <button
           type="button"
           className="output-pill"
-          onClick={() => toast(currentPort.plugged ? '正在为设备供电' : '未检测到充电设备')}
+          onClick={() => toast(isPlugged(currentPort) ? '当前端口正在输出' : '未检测到线缆')}
         >
           <OutputIcon size={15} /> 输出
         </button>
@@ -102,35 +190,40 @@ export function DevicePage() {
       </div>
 
       <section className="port-summary-card">
-        {ports.map((port) => (
-          <button
-            type="button"
-            key={port.id}
-            className={`port-summary${selectedPort === port.id ? ' is-active' : ''}`}
-            onClick={() => setSelectedPort(port.id)}
-          >
-            <span className="port-chip">{port.id}</span>
-            <span className="port-power">
-              {port.plugged ? port.power.toFixed(1) : '--'} <em>W</em>
-            </span>
-            <span className="port-vi">
-              {port.voltage > 0 ? `${port.voltage.toFixed(1)}V / ${port.current.toFixed(1)}A` : '--V / --A'}
-            </span>
-          </button>
-        ))}
+        {ports.map((port) => {
+          const plugged = isPlugged(port)
+          return (
+            <button
+              type="button"
+              key={port.id}
+              className={`port-summary${selectedPort === port.id ? ' is-active' : ''}`}
+              onClick={() => setSelectedPort(port.id)}
+            >
+              <span className="port-chip">{port.id}</span>
+              <span className="port-power">
+                {plugged ? formatWatts(port.power) : '--'} <em>W</em>
+              </span>
+              <span className="port-vi">
+                {plugged || port.voltage !== null
+                  ? `${formatVoltage(port.voltage)} / ${formatCurrent(port.current)}`
+                  : '--V / --A'}
+              </span>
+            </button>
+          )
+        })}
       </section>
 
       <div className="section-heading">
         <h2>实时数据</h2>
-        <span className="demo-chip">演示</span>
+        <span className={`demo-chip${anker.phase === 'ready' ? ' is-live' : ''}`}>{chip}</span>
         <ChevronRightIcon className="section-chevron" />
       </div>
       <section className="card chart-card">
         <p className="chart-label">总输出</p>
         <p className="chart-value">
-          {totalPower.toFixed(1)} <span>W</span>
+          {formatWatts(anker.totalPower)} <span>W</span>
         </p>
-        <Sparkline data={history} />
+        <Sparkline data={anker.history} />
       </section>
 
       <div className="section-heading">
@@ -164,9 +257,10 @@ export function DevicePage() {
               </button>
               <button
                 type="button"
-                className={`port-toggle is-filled${settings.portPower[selectedPort] && currentPort.plugged ? ' is-on' : ''}`}
+                className={`port-toggle is-filled${currentPort.outputOn ? ' is-on' : ''}`}
                 aria-label="端口电源"
                 onClick={togglePower}
+                disabled={!sessionReady}
               >
                 <PowerIcon />
               </button>
@@ -176,15 +270,15 @@ export function DevicePage() {
           <div className="port-info">
             <div>
               <span>线缆信息</span>
-              <span>{currentPort.cable}</span>
+              <span>{isPlugged(currentPort) ? (currentPort.cable ?? '已连接') : '未检测到线缆'}</span>
             </div>
             <div>
               <span>充电信息</span>
-              <span>{currentPort.charging}</span>
+              <span>{currentPort.charging ?? '—'}</span>
             </div>
             <div>
               <span>设备信息</span>
-              <span>{currentPort.device}</span>
+              <span>—</span>
             </div>
           </div>
         </div>
@@ -196,28 +290,30 @@ export function DevicePage() {
             <InfoHexIcon size={20} /> 充电模式
           </span>
           <span className="mode-value">
-            {settings.chargingMode}
+            {liveMode ?? settings.chargingMode}
             <ChevronRightIcon />
           </span>
         </button>
       </section>
 
-      {!connected && (
-        <p className="page-footnote">
-          当前为演示数据。连接设备并接入安克私有协议后，可显示真实端口功率。
-        </p>
-      )}
+      {footnote !== null && <p className="page-footnote">{footnote}</p>}
 
       <OptionSheet
         open={modeOpen}
         title="充电模式"
         options={CHARGING_MODES}
-        value={settings.chargingMode}
-        onSelect={(mode) => {
-          update({ chargingMode: mode })
-          toast(`已切换为 ${mode}`)
-        }}
+        value={liveMode ?? settings.chargingMode}
+        onSelect={applyMode}
         onClose={() => setModeOpen(false)}
+      />
+
+      <OptionSheet
+        open={timerOpen}
+        title={`${selectedPort} 定时关闭`}
+        options={TIMER_OPTIONS}
+        value={settings.portTimer[selectedPort] ? '30 分钟' : '关闭'}
+        onSelect={applyTimer}
+        onClose={() => setTimerOpen(false)}
       />
     </div>
   )

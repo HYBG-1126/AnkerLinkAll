@@ -1,3 +1,5 @@
+import type { AnkerState } from '../anker/protocol'
+
 export type LogLevel = 'system' | 'info' | 'success' | 'warn' | 'error' | 'tx' | 'rx'
 
 export interface LogEntry {
@@ -60,6 +62,7 @@ export interface BleState {
   extraServiceUuids: string[]
   logs: LogEntry[]
   busy: boolean
+  anker: AnkerState
 }
 
 export type WriteMode = 'with-response' | 'without-response'

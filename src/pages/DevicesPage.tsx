@@ -82,7 +82,7 @@ export function DevicesPage() {
 
       {state.knownDevices.length === 0 && (
         <p className="page-footnote">
-          当前展示演示数据。点击右上角 + 扫描并连接附近的安克蓝牙设备。
+          还没有已授权的设备。点击右上角 + 扫描并连接附近的安克蓝牙设备，连接后会读取真实端口数据。
         </p>
       )}
 

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import ankerLogo from '../assets/anker-logo.svg'
 import { RootHeader } from '../components/PageHeader'
 import { ListGroup, ListRow } from '../components/List'
 import { Sheet } from '../components/Sheet'
@@ -96,7 +97,7 @@ export function ProfilePage() {
 
       <Sheet open={aboutOpen} title="关于" onClose={() => setAboutOpen(false)}>
         <div className="about-block">
-          <span className="about-mark">AL</span>
+          <img src={ankerLogo} alt="ANKER" className="about-logo" />
           <p className="about-name">AnkerLinkAll 安克万连</p>
           <p className="muted">版本 {APP_VERSION}</p>
           <p className="about-desc">

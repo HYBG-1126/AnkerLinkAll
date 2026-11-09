@@ -1,3 +1,4 @@
+import { ANKER_NOTIFY_UUID, ANKER_SERVICE_UUID, ANKER_WRITE_UUID } from '../anker/protocol'
 import { sigUuid } from '../uuid'
 
 export const ANKER_NAME_PREFIXES = [
@@ -10,6 +11,7 @@ export const ANKER_NAME_PREFIXES = [
   'eufy',
   'Nebula',
   'AnkerMake',
+  'ASHDJW',
 ]
 
 export const UUIDS = {
@@ -39,6 +41,7 @@ export const SERVICE_NAMES: Record<string, string> = {
   [UUIDS.genericAttribute]: '通用属性服务',
   [UUIDS.deviceInformation]: '设备信息服务',
   [UUIDS.batteryService]: '电池服务',
+  [ANKER_SERVICE_UUID]: '安克 A2687 私有服务',
 }
 
 export const CHARACTERISTIC_NAMES: Record<string, string> = {
@@ -50,8 +53,8 @@ export const CHARACTERISTIC_NAMES: Record<string, string> = {
   [UUIDS.firmwareRevision]: '固件版本',
   [UUIDS.hardwareRevision]: '硬件版本',
   [UUIDS.softwareRevision]: '软件版本',
+  [ANKER_WRITE_UUID]: '安克写入特征值',
+  [ANKER_NOTIFY_UUID]: '安克通知特征值',
 }
 
-// 安克私有 GATT 服务 UUID 请按具体产品协议补充，例如：
-// export const VENDOR_SERVICE_UUIDS = ['0000ffe0-0000-1000-8000-00805f9b34fb']
-export const VENDOR_SERVICE_UUIDS: string[] = []
+export const VENDOR_SERVICE_UUIDS: string[] = [ANKER_SERVICE_UUID]

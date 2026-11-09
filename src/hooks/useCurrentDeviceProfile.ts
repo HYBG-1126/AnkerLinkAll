@@ -14,14 +14,16 @@ export function useCurrentDeviceProfile(): {
     return { connected: false, deviceKey: 'demo', profile: DEMO_DEVICE }
   }
 
+  const isAnker = state.anker.phase !== 'idle' && state.anker.phase !== 'unsupported'
+
   return {
     connected: true,
     deviceKey: state.device.id,
     profile: {
       name: state.device.name,
-      sn: state.summary.serial ?? '—',
-      firmware: state.summary.firmware ?? '—',
-      model: state.summary.model ?? '—',
+      sn: state.summary.serial ?? state.anker.serial ?? '—',
+      firmware: state.summary.firmware ?? state.anker.firmware ?? '—',
+      model: state.summary.model ?? (isAnker ? 'A2687' : '—'),
     },
   }
 }
