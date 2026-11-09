@@ -36,6 +36,7 @@ export function DeviceSettingsPage() {
   const sessionReady = connected && state.anker.phase === 'ready'
   const liveMode =
     state.anker.chargingMode !== null ? CHARGING_MODE_LABELS[state.anker.chargingMode] : null
+  const brightnessValue = settings.brightness ?? 65
 
   const applyMode = (value: string) => {
     const mode = CHARGING_MODE_VALUES[value]
@@ -72,7 +73,7 @@ export function DeviceSettingsPage() {
     mode: {
       title: '充电模式',
       options: CHARGING_MODES,
-      value: liveMode ?? settings.chargingMode,
+      value: liveMode ?? '',
       onSelect: applyMode,
     },
     screenOff: {
@@ -148,25 +149,25 @@ export function DeviceSettingsPage() {
         <ListRow
           label="充电模式"
           icon={<PowerIcon />}
-          value={liveMode ?? settings.chargingMode}
+          value={liveMode ?? '未获取'}
           onClick={() => setOption('mode')}
         />
         <ListRow
           label="屏幕亮度"
           icon={<StarIcon />}
-          value={`${settings.brightness}%`}
+          value={settings.brightness === null ? '未设置' : `${settings.brightness}%`}
           onClick={() => setBrightnessOpen(true)}
         />
         <ListRow
           label="熄屏时间"
           icon={<BellIcon />}
-          value={settings.screenOff}
+          value={settings.screenOff || '未设置'}
           onClick={() => setOption('screenOff')}
         />
         <ListRow
           label="屏幕旋转"
           icon={<SettingsHexIcon />}
-          value={settings.rotation}
+          value={settings.rotation || '未设置'}
           onClick={() => setOption('rotation')}
         />
         <ListRow
@@ -178,7 +179,7 @@ export function DeviceSettingsPage() {
         <ListRow
           label="屏保设置"
           icon={<BookIcon />}
-          value={settings.screensaver}
+          value={settings.screensaver || '未设置'}
           onClick={() => setOption('screensaver')}
         />
       </ListGroup>
@@ -186,7 +187,7 @@ export function DeviceSettingsPage() {
       <ListGroup title="通用设置">
         <ListRow
           label="设备名称"
-          value={connected ? profile.name : settings.name}
+          value={connected ? profile.name : settings.name || '未设置'}
           onClick={() => {
             setNameDraft(settings.name)
             setNameOpen(true)
@@ -225,13 +226,13 @@ export function DeviceSettingsPage() {
 
       <Sheet open={brightnessOpen} title="屏幕亮度" onClose={() => setBrightnessOpen(false)}>
         <div className="sheet-slider">
-          <span>{settings.brightness}%</span>
+          <span>{brightnessValue}%</span>
           <input
             type="range"
             min={10}
             max={100}
             step={5}
-            value={settings.brightness}
+            value={brightnessValue}
             aria-label="屏幕亮度"
             onChange={(event) => update({ brightness: Number(event.target.value) })}
           />
@@ -244,8 +245,11 @@ export function DeviceSettingsPage() {
               toast('设备未连接，亮度设置未下发')
               return
             }
-            void manager.setAnkerSetting('brightness', settings.brightness).then((ok) => {
-              if (ok) setBrightnessOpen(false)
+            void manager.setAnkerSetting('brightness', brightnessValue).then((ok) => {
+              if (ok) {
+                update({ brightness: brightnessValue })
+                setBrightnessOpen(false)
+              }
               toast(ok ? '屏幕亮度已下发' : '屏幕亮度下发失败')
             })
           }}
@@ -257,17 +261,17 @@ export function DeviceSettingsPage() {
       <Sheet open={firmwareOpen} title="固件升级" onClose={() => setFirmwareOpen(false)}>
         <div className="sheet-info">
           <p>当前版本 {profile.firmware}</p>
-          <p className="muted">已是最新版本，无需升级。</p>
+          <p className="muted">固件升级功能尚未接入，无法在此检查更新。</p>
         </div>
         <button
           type="button"
           className="sheet-primary"
           onClick={() => {
             setFirmwareOpen(false)
-            toast('已是最新版本')
+            toast('固件升级功能尚未接入')
           }}
         >
-          检查更新
+          知道了
         </button>
       </Sheet>
 

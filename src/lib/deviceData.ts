@@ -7,11 +7,4 @@ export interface DeviceProfile {
   model: string
 }
 
-export const DEMO_DEVICE: DeviceProfile = {
-  name: '160W Prime Charger',
-  sn: '—',
-  firmware: '—',
-  model: 'A2687',
-}
-
 export const MAX_OUTPUT_WATTS = 160

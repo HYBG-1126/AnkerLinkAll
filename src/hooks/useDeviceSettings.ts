@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
-import { DEMO_DEVICE } from '../lib/deviceData'
 import type { PortId } from '../lib/deviceData'
 
 export interface DeviceSettings {
   name: string
   chargingMode: string
-  brightness: number
+  brightness: number | null
   screenOff: string
   rotation: string
   screensaver: string
@@ -29,13 +28,13 @@ export const ROTATION_OPTIONS = ['向上', '向左', '向下', '向右'] as cons
 export const SCREENSAVER_OPTIONS = ['关闭', '时钟', '星空'] as const
 
 const DEFAULTS: DeviceSettings = {
-  name: DEMO_DEVICE.name,
-  chargingMode: CHARGING_MODES[0],
-  brightness: 65,
-  screenOff: SCREEN_OFF_OPTIONS[0],
-  rotation: ROTATION_OPTIONS[0],
-  screensaver: SCREENSAVER_OPTIONS[0],
-  portPower: { C1: true, C2: false, C3: false },
+  name: '',
+  chargingMode: '',
+  brightness: null,
+  screenOff: '',
+  rotation: '',
+  screensaver: '',
+  portPower: { C1: false, C2: false, C3: false },
   portTimer: { C1: false, C2: false, C3: false },
 }
 
@@ -47,18 +46,22 @@ function cloneDefaults(): DeviceSettings {
   }
 }
 
-function oneOf<T extends string>(options: readonly T[], value: unknown, fallback: T): T {
-  return typeof value === 'string' && (options as readonly string[]).includes(value) ? (value as T) : fallback
+function oneOf(options: readonly string[], value: unknown, fallback: string): string {
+  return typeof value === 'string' && options.includes(value) ? value : fallback
 }
+
+const STORAGE_VERSION = 2
 
 function load(storageKey: string): DeviceSettings {
   try {
     const raw = localStorage.getItem(storageKey)
     if (!raw) return cloneDefaults()
-    const parsed = JSON.parse(raw) as Partial<DeviceSettings>
+    const parsed = JSON.parse(raw) as Partial<DeviceSettings> & { version?: number }
+    if (parsed.version !== STORAGE_VERSION) return cloneDefaults()
     return {
       ...cloneDefaults(),
       ...parsed,
+      name: typeof parsed.name === 'string' ? parsed.name : DEFAULTS.name,
       chargingMode: oneOf(CHARGING_MODES, parsed.chargingMode, DEFAULTS.chargingMode),
       screenOff: oneOf(SCREEN_OFF_OPTIONS, parsed.screenOff, DEFAULTS.screenOff),
       rotation: oneOf(ROTATION_OPTIONS, parsed.rotation, DEFAULTS.rotation),
@@ -81,7 +84,7 @@ export function useDeviceSettings(deviceKey: string) {
 
   useEffect(() => {
     try {
-      localStorage.setItem(storageKey, JSON.stringify(settings))
+      localStorage.setItem(storageKey, JSON.stringify({ version: STORAGE_VERSION, ...settings }))
     } catch {
       // 隐私模式写入失败不影响当前会话
     }

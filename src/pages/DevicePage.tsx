@@ -80,7 +80,7 @@ export function DevicePage() {
   const anker = state.anker
   const ports = anker.ports
   const currentPort = ports.find((port) => port.id === selectedPort) ?? ports[0]
-  const displayName = connected ? profile.name : settings.name
+  const displayName = profile.name
   const sessionReady = connected && anker.phase === 'ready'
   const chip = statusChip(anker.phase, connected)
   const liveMode = anker.chargingMode !== null ? CHARGING_MODE_LABELS[anker.chargingMode] : null
@@ -168,7 +168,15 @@ export function DevicePage() {
       />
 
       <section className="device-hero">
-        <img src={productImage} alt={displayName} className="hero-product" />
+        {connected ? (
+          <img src={productImage} alt={displayName} className="hero-product" />
+        ) : (
+          <div className="hero-empty">
+            <BluetoothBadgeIcon size={30} />
+            <p>未连接设备</p>
+            <span>点击下方蓝牙按钮扫描并连接附近的安克设备</span>
+          </div>
+        )}
       </section>
 
       <div className="hero-actions">
@@ -290,7 +298,7 @@ export function DevicePage() {
             <InfoHexIcon size={20} /> 充电模式
           </span>
           <span className="mode-value">
-            {liveMode ?? settings.chargingMode}
+            {liveMode ?? '—'}
             <ChevronRightIcon />
           </span>
         </button>
@@ -302,7 +310,7 @@ export function DevicePage() {
         open={modeOpen}
         title="充电模式"
         options={CHARGING_MODES}
-        value={liveMode ?? settings.chargingMode}
+        value={liveMode ?? ''}
         onSelect={applyMode}
         onClose={() => setModeOpen(false)}
       />
@@ -311,7 +319,7 @@ export function DevicePage() {
         open={timerOpen}
         title={`${selectedPort} 定时关闭`}
         options={TIMER_OPTIONS}
-        value={settings.portTimer[selectedPort] ? '30 分钟' : '关闭'}
+        value={settings.portTimer[selectedPort] ? '' : '关闭'}
         onSelect={applyTimer}
         onClose={() => setTimerOpen(false)}
       />

@@ -54,14 +54,14 @@ export function ProfilePage() {
           <UserIcon size={30} />
         </span>
         <div className="profile-text">
-          <p className="profile-name">用户47885785</p>
+          <p className="profile-name">本机用户</p>
           <p className="profile-sub">
             {state.connectionState === 'connected'
               ? `已连接 · ${state.device?.name ?? ''}`
               : '未连接设备'}
           </p>
         </div>
-        <span className="profile-tag">普通会员</span>
+        <span className="profile-tag">本地模式</span>
       </section>
 
       <section className="promo-card">
@@ -77,7 +77,7 @@ export function ProfilePage() {
 
       <ListGroup>
         <ListRow label="帮助和反馈" icon={<HelpIcon />} onClick={() => toast('反馈通道即将开放')} />
-        <ListRow label="用户手册" icon={<BookIcon />} onClick={() => toast('手册已是最新版本')} />
+        <ListRow label="用户手册" icon={<BookIcon />} onClick={() => toast('用户手册尚未内置')} />
         <ListRow label="设备设置" icon={<SettingsHexIcon />} onClick={() => navigate('/device/settings')} />
         <ListRow label="关于" icon={<StarIcon />} onClick={() => setAboutOpen(true)} />
       </ListGroup>

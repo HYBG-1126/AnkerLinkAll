@@ -3,12 +3,10 @@ import productImage from '../assets/device-160w.png'
 import { RootHeader } from '../components/PageHeader'
 import { BluetoothBadgeIcon, PlusIcon } from '../components/icons'
 import { useBle } from '../hooks/useBle'
-import { useDeviceSettings } from '../hooks/useDeviceSettings'
 
 export function DevicesPage() {
   const { state, manager } = useBle()
   const navigate = useNavigate()
-  const { settings } = useDeviceSettings('demo')
 
   const handleScan = () => {
     void manager.requestDevice({ acceptAllDevices: false })
@@ -39,7 +37,7 @@ export function DevicesPage() {
 
       {!state.supported && (
         <div className="notice">
-          当前环境不支持 Web Bluetooth，仅可浏览演示界面。在 macOS 客户端中可使用真实蓝牙。
+          当前环境不支持 Web Bluetooth，无法扫描设备。在 macOS 客户端中可使用真实蓝牙。
         </div>
       )}
 
@@ -64,20 +62,6 @@ export function DevicesPage() {
           </button>
         ))}
 
-        {state.knownDevices.length === 0 && (
-          <button type="button" className="device-card" onClick={() => navigate('/device')}>
-            <span className="device-thumb">
-              <img src={productImage} alt="" />
-            </span>
-            <span className="device-card-text">
-              <span className="device-card-name">{settings.name}</span>
-              <span className="device-card-status">
-                <BluetoothBadgeIcon size={13} />
-                未连接
-              </span>
-            </span>
-          </button>
-        )}
       </div>
 
       {state.knownDevices.length === 0 && (
@@ -86,11 +70,9 @@ export function DevicesPage() {
         </p>
       )}
 
-      {state.knownDevices.length > 0 && (
-        <button type="button" className="scan-link" onClick={handleScan} disabled={!state.supported || state.busy}>
-          <PlusIcon size={16} /> 扫描附近设备
-        </button>
-      )}
+      <button type="button" className="scan-link" onClick={handleScan} disabled={!state.supported || state.busy}>
+        <PlusIcon size={16} /> 扫描附近设备
+      </button>
     </div>
   )
 }
