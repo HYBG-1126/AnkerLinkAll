@@ -189,7 +189,7 @@ function attachBluetoothPicker(win) {
   let lastLoggedCount = -1
 
   const rankName = (name) => {
-    if (/anker|soundcore|eufy|nebula|ankermake|a2687|prime/i.test(name)) return 0
+    if (/anker|soundcore|eufy|nebula|ankermake|a2687|prime|ashd/i.test(name)) return 0
     if (/^未知或不支持/.test(name)) return 2
     return 1
   }

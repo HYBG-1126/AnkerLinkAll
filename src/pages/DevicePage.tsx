@@ -144,7 +144,7 @@ export function DevicePage() {
   }
 
   const footnote = (() => {
-    if (!connected) return '连接安克 A2687 充电器后，这里会显示真实的端口功率、电压与电流。'
+    if (!connected) return state.connectionError ?? '连接安克 A2687 充电器后，这里会显示真实的端口功率、电压与电流。'
     if (anker.phase === 'handshaking') return anker.message
     if (anker.phase === 'error' || anker.phase === 'unsupported') return anker.message
     if (anker.phase === 'ready' && anker.lastUpdatedAt === null) return '会话已建立，等待设备上报遥测数据…'

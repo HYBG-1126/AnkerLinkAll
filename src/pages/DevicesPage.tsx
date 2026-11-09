@@ -42,6 +42,7 @@ export function DevicesPage() {
       )}
 
       {state.scanError !== null && <div className="notice">{state.scanError}</div>}
+      {state.connectionError !== null && <div className="notice">{state.connectionError}</div>}
 
       <div className="device-card-list">
         {state.knownDevices.map((device) => (

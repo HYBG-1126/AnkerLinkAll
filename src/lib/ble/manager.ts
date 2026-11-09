@@ -28,11 +28,49 @@ import { isValidUuid, normalizeUuid, shortUuid } from '../uuid'
 
 const STORAGE_KEY = 'ankerlink.extraServiceUuids'
 const MAX_LOGS = 300
+const CONNECT_TIMEOUT_MS = 12000
+const DISCOVERY_TIMEOUT_MS = 15000
 
 function describeError(error: unknown): string {
   if (error instanceof DOMException) return `${error.name}：${error.message}`
   if (error instanceof Error) return error.message
   return String(error)
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), ms)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        window.clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
+function describeConnectFailure(error: unknown): string {
+  const detail = describeError(error)
+  if (error instanceof DOMException) {
+    switch (error.name) {
+      case 'NetworkError':
+        return `无法建立 GATT 连接。该设备可能已被手机上的安克 App 或其他主机占用，请先在手机端断开或退出安克 App，再靠近充电器重试。（${detail}）`
+      case 'SecurityError':
+      case 'NotAllowedError':
+        return `系统拒绝了蓝牙访问。请在「系统设置 → 隐私与安全性 → 蓝牙」中允许 AnkerLinkAll，并允许系统配对弹窗。（${detail}）`
+      case 'NotFoundError':
+        return `未找到该设备。设备可能已离开范围、进入休眠或关闭了蓝牙，请靠近后重新扫描。（${detail}）`
+      case 'NotSupportedError':
+        return `该设备不支持所需的 GATT 连接。（${detail}）`
+      case 'InvalidStateError':
+        return `设备当前状态不允许连接，请重新扫描后再试。（${detail}）`
+    }
+  }
+  return `连接失败：${detail}`
 }
 
 function loadStoredServices(): string[] {
@@ -73,6 +111,7 @@ export class BleManager {
     logs: [],
     busy: false,
     scanError: null,
+    connectionError: null,
     anker: createInitialAnkerState(),
   }
 
@@ -136,7 +175,7 @@ export class BleManager {
     }
 
     const optionalServices = [...new Set([...STANDARD_SERVICE_UUIDS, ...this.state.extraServiceUuids])]
-    this.setState({ busy: true, scanError: null })
+    this.setState({ busy: true, scanError: null, connectionError: null })
     this.log(
       'system',
       options.acceptAllDevices
@@ -179,7 +218,7 @@ export class BleManager {
       this.log('error', '设备不在已授权列表中，请重新扫描')
       return
     }
-    this.setState({ busy: true })
+    this.setState({ busy: true, connectionError: null })
     try {
       await this.connectDevice(device)
     } finally {
@@ -204,6 +243,7 @@ export class BleManager {
       services: [],
       summary: {},
       busy: false,
+      connectionError: null,
       anker: createInitialAnkerState(),
     })
     this.log('info', `已断开 ${device.name ?? device.id}`)
@@ -431,37 +471,79 @@ export class BleManager {
     if (this.device?.id === device.id && this.server?.connected) return
     if (this.device) await this.disconnect()
 
+    const name = device.name ?? device.id
     this.setState({
       connectionState: 'connecting',
-      device: { id: device.id, name: device.name ?? '未命名设备' },
+      device: { id: device.id, name },
       services: [],
       summary: {},
+      connectionError: null,
     })
-    this.log('system', `正在连接 ${device.name ?? device.id} …`)
+    this.log('system', `正在连接 ${name} …`)
     device.addEventListener('gattserverdisconnected', this.handleDisconnected)
 
     try {
-      const server = await device.gatt?.connect()
-      if (!server) throw new Error('该设备不支持 GATT 连接')
+      const server = await this.openGatt(device)
       this.device = device
       this.server = server
-      this.setState({ connectionState: 'connected' })
-      this.log('success', `已连接 ${device.name ?? device.id}`)
-      await this.discoverServices()
-      await this.readSummary()
-      await this.startAnkerSession()
+      this.setState({ connectionState: 'connected', connectionError: null })
+      this.log('success', `已连接 ${name}`)
     } catch (error) {
       device.removeEventListener('gattserverdisconnected', this.handleDisconnected)
       this.cleanupConnection()
+      const message = describeConnectFailure(error)
       this.setState({
         connectionState: 'idle',
         device: null,
         services: [],
         summary: {},
+        connectionError: message,
         anker: createInitialAnkerState(),
       })
-      this.log('error', `连接失败：${describeError(error)}`)
+      this.log('error', message)
+      return
     }
+
+    try {
+      await withTimeout(this.discoverServices(), DISCOVERY_TIMEOUT_MS, '发现 GATT 服务超时')
+    } catch (error) {
+      this.log('warn', `发现 GATT 服务失败：${describeError(error)}`)
+    }
+
+    await this.readSummary().catch((error) => {
+      this.log('warn', `读取设备信息失败：${describeError(error)}`)
+    })
+
+    await this.startAnkerSession()
+  }
+
+  private async openGatt(device: BluetoothDevice): Promise<BluetoothRemoteGATTServer> {
+    const gatt = device.gatt
+    if (!gatt) throw new Error('该设备不支持 GATT 连接')
+
+    let lastError: unknown = null
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const server = await withTimeout(
+          gatt.connect(),
+          CONNECT_TIMEOUT_MS,
+          '连接超时，设备可能处于休眠或被其他主机占用',
+        )
+        if (server.connected) return server
+        throw new Error('GATT 连接未建立')
+      } catch (error) {
+        lastError = error
+        this.log('warn', `第 ${attempt} 次连接尝试失败：${describeError(error)}`)
+        if (
+          error instanceof DOMException &&
+          (error.name === 'SecurityError' || error.name === 'NotAllowedError')
+        ) {
+          break
+        }
+        if (attempt === 1) await new Promise((resolve) => window.setTimeout(resolve, 800))
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(describeError(lastError))
   }
 
   private async startAnkerSession(): Promise<void> {
@@ -471,15 +553,27 @@ export class BleManager {
 
     let service: BluetoothRemoteGATTService
     try {
-      service = await server.getPrimaryService(ANKER_SERVICE_UUID)
-    } catch {
+      service = await withTimeout(
+        server.getPrimaryService(ANKER_SERVICE_UUID),
+        8000,
+        '获取安克私有服务超时',
+      )
+    } catch (error) {
+      const exposed = this.state.services.some(
+        (item) => normalizeUuid(item.uuid) === ANKER_SERVICE_UUID,
+      )
+      const detail = describeError(error)
       this.setState({
         anker: {
           ...createInitialAnkerState(),
-          phase: 'unsupported',
-          message: '该设备未提供 A2687 私有服务，仅支持标准 GATT 调试',
+          phase: exposed ? 'error' : 'unsupported',
+          message: exposed
+            ? `无法访问安克私有服务：${detail}`
+            : '该设备未提供 A2687 私有服务，仅支持标准 GATT 调试',
+          error: exposed ? detail : null,
         },
       })
+      this.log(exposed ? 'error' : 'warn', `获取安克私有服务失败：${detail}`)
       return
     }
 
@@ -556,29 +650,38 @@ export class BleManager {
     if (!server) return
 
     this.characteristicMap.clear()
-    const primaryServices = await server.getPrimaryServices()
+    let primaryServices: BluetoothRemoteGATTService[] = []
+    try {
+      primaryServices = await server.getPrimaryServices()
+    } catch (error) {
+      this.log('warn', `枚举 GATT 主服务失败：${describeError(error)}`)
+    }
     const services: ServiceInfo[] = []
 
     for (const service of primaryServices) {
-      const characteristics = await service.getCharacteristics()
       const infos: CharacteristicInfo[] = []
-      for (const characteristic of characteristics) {
-        this.characteristicMap.set(this.key(service.uuid, characteristic.uuid), characteristic)
-        infos.push({
-          uuid: characteristic.uuid,
-          name: CHARACTERISTIC_NAMES[normalizeUuid(characteristic.uuid)],
-          serviceUuid: service.uuid,
-          properties: {
-            read: characteristic.properties.read,
-            write: characteristic.properties.write,
-            writeWithoutResponse: characteristic.properties.writeWithoutResponse,
-            notify: characteristic.properties.notify,
-            indicate: characteristic.properties.indicate,
-          },
-          value: null,
-          notifying: false,
-          lastUpdatedAt: null,
-        })
+      try {
+        const characteristics = await service.getCharacteristics()
+        for (const characteristic of characteristics) {
+          this.characteristicMap.set(this.key(service.uuid, characteristic.uuid), characteristic)
+          infos.push({
+            uuid: characteristic.uuid,
+            name: CHARACTERISTIC_NAMES[normalizeUuid(characteristic.uuid)],
+            serviceUuid: service.uuid,
+            properties: {
+              read: characteristic.properties.read,
+              write: characteristic.properties.write,
+              writeWithoutResponse: characteristic.properties.writeWithoutResponse,
+              notify: characteristic.properties.notify,
+              indicate: characteristic.properties.indicate,
+            },
+            value: null,
+            notifying: false,
+            lastUpdatedAt: null,
+          })
+        }
+      } catch (error) {
+        this.log('warn', `读取服务 ${shortUuid(service.uuid)} 特征值失败：${describeError(error)}`)
       }
       services.push({
         uuid: service.uuid,
@@ -672,6 +775,8 @@ export class BleManager {
       device: null,
       services: [],
       summary: {},
+      busy: false,
+      connectionError: null,
       anker: createInitialAnkerState(),
       knownDevices: this.state.knownDevices.map((device) => ({ ...device, connected: false })),
     })

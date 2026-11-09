@@ -11,6 +11,8 @@ export const ANKER_NAME_PREFIXES = [
   'eufy',
   'Nebula',
   'AnkerMake',
+  'A2687',
+  'ASHD',
   'ASHDJW',
 ]
 

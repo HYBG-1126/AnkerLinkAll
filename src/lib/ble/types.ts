@@ -63,6 +63,7 @@ export interface BleState {
   logs: LogEntry[]
   busy: boolean
   scanError: string | null
+  connectionError: string | null
   anker: AnkerState
 }
 
