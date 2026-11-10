@@ -33,16 +33,10 @@ open build/AnkerLinkAll.app
 ## 打包安装包
 
 ```bash
-# 内嵌 Qt 框架
-/opt/homebrew/opt/qt/bin/macdeployqt qt/build/AnkerLinkAll.app -always-overwrite
-
-# 生成 DMG
-rm -rf /tmp/anker-dmg && mkdir -p /tmp/anker-dmg
-cp -R qt/build/AnkerLinkAll.app /tmp/anker-dmg/
-ln -s /Applications /tmp/anker-dmg/Applications
-hdiutil create -volname AnkerLinkAll -srcfolder /tmp/anker-dmg -ov -format UDZO \
-  release/AnkerLinkAll-0.2.0-arm64.dmg
+./scripts/package.sh
 ```
+
+脚本会部署 Qt 框架与 QML 模块（`macdeployqt -qmldir=qml`）、写入包内相对路径的 `qt.conf`、清理未使用的虚拟键盘模块、ad-hoc 签名，并输出 `release/AnkerLinkAll-<版本>-arm64.dmg`。
 
 安装包使用 ad-hoc 签名，适合本机与内部分发。首次启动如被 Gatekeeper 拦截，可右键应用选择「打开」，或执行：
 
