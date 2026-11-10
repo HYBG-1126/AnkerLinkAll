@@ -2,7 +2,7 @@
 .DS_Store
 
 # Qt build output
-qt/build/
+build/
 
 # Release artifacts
 release/

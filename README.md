@@ -25,9 +25,9 @@
 依赖：Xcode Command Line Tools、CMake ≥ 3.21、Ninja、Qt 6.5+（Homebrew `qt`，含 Bluetooth 模块）。
 
 ```bash
-/opt/homebrew/opt/qt/bin/qt-cmake -G Ninja -S qt -B qt/build -DCMAKE_BUILD_TYPE=Release
-cmake --build qt/build
-open qt/build/AnkerLinkAll.app
+/opt/homebrew/opt/qt/bin/qt-cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+open build/AnkerLinkAll.app
 ```
 
 ## 打包安装包
@@ -77,7 +77,6 @@ xattr -dr com.apple.quarantine /Applications/AnkerLinkAll.app
 ## 项目结构
 
 ```
-qt/
 ├── CMakeLists.txt        # Qt 6 工程定义、QML 模块与 macOS Bundle 配置
 ├── cmake/Info.plist.in   # LSUIElement、蓝牙权限说明
 ├── src/
@@ -93,7 +92,7 @@ qt/
 │   ├── DevicePage.qml      # 第二层：设备详情
 │   ├── SettingsPage.qml    # 第三层：设备设置
 │   └── LogsPage.qml        # 日志
-└── assets/               # 菜单栏模板图标、应用图标、产品图
+└── assets/               # 应用图标（由 anker-logo.svg 生成）、菜单栏模板图标、产品图
 ```
 
 ## 连接排障
