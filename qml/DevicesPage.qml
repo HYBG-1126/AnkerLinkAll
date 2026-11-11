@@ -6,11 +6,22 @@ Item {
     id: page
     signal openDevice()
     signal openLogs()
+    signal openSettings()
+
+    property int tabIndex: 0
 
     readonly property bool online: charger.hasDevice && (charger.sessionReady || charger.reconnecting)
 
-    Flickable {
-        anchors.fill: parent
+    StackLayout {
+        anchors.top: parent.top
+        anchors.bottom: tabBar.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        currentIndex: page.tabIndex
+
+        Item {
+            Flickable {
+                anchors.fill: parent
         contentHeight: body.implicitHeight + 24
         clip: true
         boundsBehavior: Flickable.StopAtBounds
@@ -140,6 +151,66 @@ Item {
                 text: App.textOr(charger.statusText)
                 color: App.sub
                 font.pixelSize: 12
+            }
+        }
+            }
+        }
+
+        ProfilePage {
+            onOpenSettings: page.openSettings()
+        }
+    }
+
+    Rectangle {
+        id: tabBar
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: 58
+        color: App.surface
+        border.color: App.line
+        border.width: 1
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.topMargin: 1
+            spacing: 0
+
+            Repeater {
+                model: [
+                    { icon: "grid", label: "设备" },
+                    { icon: "user", label: "我的" }
+                ]
+                delegate: Item {
+                    required property var modelData
+                    required property int index
+                    readonly property bool active: page.tabIndex === index
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: 3
+                        Icon {
+                            Layout.alignment: Qt.AlignHCenter
+                            name: modelData.icon
+                            size: 22
+                            strokeWidth: active ? 2.2 : 1.8
+                            color: active ? App.accentDeep : App.sub
+                        }
+                        Text {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: modelData.label
+                            color: active ? App.accentDeep : App.sub
+                            font.pixelSize: 10
+                            font.weight: active ? Font.DemiBold : Font.Normal
+                        }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: page.tabIndex = index
+                    }
+                }
             }
         }
     }

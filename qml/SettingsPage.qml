@@ -97,9 +97,11 @@ Item {
                     ListRow {
                         label: "屏幕旋转"
                         value: App.prefs.rotation >= 0 ? App.rotationOptions[App.prefs.rotation] : "—"
-                        showDivider: false
                         onClicked: rotationSheet.open()
                     }
+                    ListRow { label: "实验室功能"; onClicked: App.toast("该功能暂未支持") }
+                    ListRow { label: "屏保设置"; onClicked: App.toast("该功能暂未支持") }
+                    ListRow { label: "协议管理"; showDivider: false; onClicked: App.toast("该功能暂未支持") }
                 }
             }
 
@@ -125,20 +127,19 @@ Item {
                             App.toast("SN 已复制")
                         }
                     }
-                    ListRow { label: "固件版本"; value: App.textOr(charger.firmware); mono: true; clickable: false }
-                    ListRow { label: "蓝牙 MAC"; value: App.textOr(charger.mac); mono: true; showDivider: false; clickable: false }
-                }
-            }
-
-            Card {
-                Layout.fillWidth: true
-                padding: 8
-                ColumnLayout {
-                    width: parent.width
-                    spacing: 0
+                    ListRow { label: "蓝牙 MAC"; value: App.textOr(charger.mac); mono: true }
+                    ListRow { label: "帮助和反馈"; onClicked: App.toast("该功能暂未支持") }
+                    ListRow {
+                        label: "固件升级"
+                        value: App.textOr(charger.firmware)
+                        mono: true
+                        onClicked: App.toast("固件升级暂未支持")
+                    }
+                    ListRow { label: "恢复默认设置"; onClicked: App.toast("该功能暂未支持") }
                     ListRow {
                         label: charger.linked ? "断开连接" : "重新连接"
                         labelColor: App.accentDeep
+                        showDivider: false
                         onClicked: {
                             if (charger.linked) {
                                 charger.disconnectDevice()
@@ -149,12 +150,20 @@ Item {
                             }
                         }
                     }
-                    ListRow {
-                        label: "忘记此设备"
-                        labelColor: App.danger
-                        showDivider: false
-                        onClicked: forgetDialog.open()
-                    }
+                }
+            }
+
+            Card {
+                Layout.fillWidth: true
+                implicitHeight: 52
+                radius: 18
+                ListRow {
+                    anchors.centerIn: parent
+                    width: parent.width - 16
+                    label: "删除设备"
+                    labelColor: App.danger
+                    showDivider: false
+                    onClicked: forgetDialog.open()
                 }
             }
 
@@ -279,7 +288,7 @@ Item {
         background: Rectangle { radius: 20; color: App.surface }
         contentItem: ColumnLayout {
             spacing: 14
-            Text { text: "忘记此设备？"; color: App.ink; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.alignment: Qt.AlignHCenter }
+            Text { text: "删除设备？"; color: App.ink; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.alignment: Qt.AlignHCenter }
             Text {
                 text: "将断开连接并清除记住的充电器，下次需要重新扫描。"
                 color: App.sub

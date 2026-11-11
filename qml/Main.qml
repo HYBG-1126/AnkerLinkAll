@@ -49,6 +49,7 @@ ApplicationWindow {
         DevicesPage {
             onOpenDevice: stack.push(devicePage)
             onOpenLogs: stack.push(logsPage)
+            onOpenSettings: stack.push(settingsPage)
         }
     }
     Component {

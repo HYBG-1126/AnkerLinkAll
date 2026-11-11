@@ -40,6 +40,7 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("AnkerLinkAll"));
+    QApplication::setApplicationVersion(QStringLiteral(APP_VERSION));
     QApplication::setOrganizationName(QStringLiteral("AnkerLinkAll"));
     QApplication::setOrganizationDomain(QStringLiteral("hybg.com"));
     QApplication::setQuitOnLastWindowClosed(false);

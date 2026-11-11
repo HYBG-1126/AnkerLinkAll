@@ -162,14 +162,11 @@ Item {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     anchors.margins: 14
-                    width: 48; height: 48; radius: 24
-                    gradient: Gradient {
-                        GradientStop { position: 0; color: page.showDevice ? "#34d399" : "#1ed2e8" }
-                        GradientStop { position: 1; color: page.showDevice ? "#10b981" : "#0aa7bd" }
-                    }
+                    width: 44; height: 44; radius: 14
+                    color: App.accentSoft
                     scale: fabMouse.pressed ? 0.94 : 1
                     Behavior on scale { NumberAnimation { duration: 90 } }
-                    Icon { anchors.centerIn: parent; name: "bluetooth"; size: 22; color: "white"; strokeWidth: 2.2 }
+                    Icon { anchors.centerIn: parent; name: "bluetooth"; size: 22; color: App.accentDeep; strokeWidth: 2.2 }
                     MouseArea {
                         id: fabMouse
                         anchors.fill: parent
