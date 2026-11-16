@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(AnkerLinkAll VERSION 0.4.0 LANGUAGES CXX OBJCXX)
+project(AnkerLinkAll VERSION 0.4.1 LANGUAGES CXX OBJCXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -44,7 +44,8 @@ qt_add_qml_module(AnkerLinkAll
         qml/PageHeader.qml
     RESOURCES
         assets/anker-logo.svg
-        assets/device-160w-empty.png
+        assets/device-a2687.png
+        assets/device-a2687-thumb.png
         assets/cable-c1.png
         assets/cable-c2.png
         assets/cable-c3.png

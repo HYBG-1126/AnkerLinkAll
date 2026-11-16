@@ -82,13 +82,12 @@ Item {
                     spacing: 16
 
                     Image {
-                        Layout.preferredWidth: 72
-                        Layout.preferredHeight: 100
-                        source: "qrc:/qt/qml/AnkerLinkAll/assets/device-160w-empty.png"
+                        Layout.preferredWidth: 80
+                        Layout.preferredHeight: 98
+                        source: "qrc:/qt/qml/AnkerLinkAll/assets/device-a2687-thumb.png"
                         fillMode: Image.PreserveAspectFit
                         smooth: true
                         mipmap: true
-                        opacity: page.online ? 1 : 0.55
                     }
 
                     ColumnLayout {

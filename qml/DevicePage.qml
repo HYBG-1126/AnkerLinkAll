@@ -77,14 +77,16 @@ Item {
                 Item {
                     id: stage
                     visible: page.showDevice
-                    anchors.centerIn: parent
-                    height: 264
-                    width: height * 1024 / 1536
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.top: parent.top
+                    anchors.topMargin: 14
+                    height: 372
+                    width: height * 504 / 729
 
                     Image {
                         id: product
                         anchors.fill: parent
-                        source: "qrc:/qt/qml/AnkerLinkAll/assets/device-160w-empty.png"
+                        source: "qrc:/qt/qml/AnkerLinkAll/assets/device-a2687.png"
                         fillMode: Image.PreserveAspectFit
                         smooth: true
                         mipmap: true

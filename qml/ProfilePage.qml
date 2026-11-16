@@ -119,12 +119,11 @@ Item {
                     anchors.right: parent.right
                     anchors.rightMargin: 10
                     anchors.verticalCenter: parent.verticalCenter
-                    width: 84; height: 108
-                    source: "qrc:/qt/qml/AnkerLinkAll/assets/device-160w-empty.png"
+                    width: 84; height: 102
+                    source: "qrc:/qt/qml/AnkerLinkAll/assets/device-a2687-thumb.png"
                     fillMode: Image.PreserveAspectFit
                     smooth: true
                     mipmap: true
-                    opacity: 0.9
                 }
 
                 MouseArea {
