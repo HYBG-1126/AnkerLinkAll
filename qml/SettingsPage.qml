@@ -99,8 +99,8 @@ Item {
                         value: App.prefs.rotation >= 0 ? App.rotationOptions[App.prefs.rotation] : "—"
                         onClicked: rotationSheet.open()
                     }
-                    ListRow { label: "实验室功能"; onClicked: App.toast("该功能暂未支持") }
-                    ListRow { label: "屏保设置"; onClicked: App.toast("该功能暂未支持") }
+                    ListRow { label: "实验室功能"; onClicked: App.toast("实验室功能由安克云端下发，桌面端暂不支持") }
+                    ListRow { label: "屏保设置"; onClicked: App.toast("自定义屏保需安克云端下发图片，桌面端暂不支持") }
                     ListRow { label: "协议管理"; showDivider: false; onClicked: App.toast("该功能暂未支持") }
                 }
             }
