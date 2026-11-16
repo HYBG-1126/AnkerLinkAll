@@ -11,6 +11,12 @@ Item {
     property int tabIndex: 0
 
     readonly property bool online: charger.hasDevice && (charger.sessionReady || charger.reconnecting)
+    readonly property var nearbyChargers: charger.nearbyDevices.filter(device => device.anker)
+
+    function openAddSheet() {
+        charger.scanNow()
+        addSheet.open()
+    }
 
     StackLayout {
         anchors.top: parent.top
@@ -56,16 +62,14 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            charger.scanNow()
-                            addSheet.open()
-                        }
+                        onClicked: page.openAddSheet()
                     }
                 }
             }
 
             Rectangle {
                 id: deviceCard
+                visible: charger.paired
                 Layout.fillWidth: true
                 Layout.preferredHeight: 128
                 radius: 24
@@ -142,7 +146,7 @@ Item {
             }
 
             Text {
-                visible: !page.online
+                visible: charger.paired && !page.online
                 Layout.fillWidth: true
                 Layout.topMargin: 4
                 horizontalAlignment: Text.AlignHCenter
@@ -150,6 +154,55 @@ Item {
                 text: App.textOr(charger.statusText)
                 color: App.sub
                 font.pixelSize: 12
+            }
+
+            ColumnLayout {
+                visible: !charger.paired
+                Layout.fillWidth: true
+                Layout.topMargin: 72
+                spacing: 10
+
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    width: 76; height: 76; radius: 38
+                    color: App.accentSoft
+                    Icon { anchors.centerIn: parent; name: "bluetooth"; size: 34; strokeWidth: 1.8; color: App.accentDeep }
+                }
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 6
+                    text: "暂无设备"
+                    color: App.ink
+                    font.pixelSize: 16
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: "接通充电器电源后，点击下方按钮添加"
+                    color: App.sub
+                    font.pixelSize: 13
+                }
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 12
+                    Layout.preferredWidth: 160
+                    Layout.preferredHeight: 42
+                    radius: 21
+                    color: emptyAddMouse.pressed ? App.accentDeep : App.accent
+                    Text {
+                        anchors.centerIn: parent
+                        text: "添加设备"
+                        color: "white"
+                        font.pixelSize: 14
+                        font.weight: Font.DemiBold
+                    }
+                    MouseArea {
+                        id: emptyAddMouse
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: page.openAddSheet()
+                    }
+                }
             }
         }
             }
@@ -243,15 +296,16 @@ Item {
             }
             Text {
                 Layout.fillWidth: true
-                visible: charger.nearbyDevices.length === 0
+                visible: page.nearbyChargers.length === 0
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
-                text: "正在搜索附近的充电器…\n请确认充电器已接通电源"
+                text: charger.scanning ? "正在搜索附近的充电器…\n请确认充电器已接通电源"
+                                       : "未发现附近的设备\n请确认充电器已接通电源后重新搜索"
                 color: App.sub
                 font.pixelSize: 13
             }
             Repeater {
-                model: charger.nearbyDevices
+                model: page.nearbyChargers
                 delegate: ListRow {
                     required property var modelData
                     Layout.fillWidth: true

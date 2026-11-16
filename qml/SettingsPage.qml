@@ -5,6 +5,7 @@ import QtQuick.Layouts
 Item {
     id: page
     signal back()
+    signal deviceRemoved()
 
     TextEdit {
         id: clipboardHelper
@@ -160,6 +161,7 @@ Item {
             }
 
             Card {
+                visible: charger.paired
                 Layout.fillWidth: true
                 implicitHeight: 52
                 radius: 18
@@ -353,7 +355,7 @@ Item {
             spacing: 14
             Text { text: "删除设备？"; color: App.ink; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.alignment: Qt.AlignHCenter }
             Text {
-                text: "将断开连接并清除记住的充电器，下次需要重新扫描。"
+                text: "将断开连接并从设备列表中移除，之后可在首页点击 + 重新添加。"
                 color: App.sub
                 font.pixelSize: 13
                 wrapMode: Text.WordWrap
@@ -365,12 +367,13 @@ Item {
                 spacing: 10
                 DialogButton { text: "取消"; onClicked: forgetDialog.close() }
                 DialogButton {
-                    text: "忘记"
+                    text: "删除"
                     primary: true
                     onClicked: {
                         forgetDialog.close()
                         charger.forgetDevice()
-                        App.toast("已忘记设备")
+                        App.toast("已删除设备，可点击右上角 + 重新添加")
+                        page.deviceRemoved()
                     }
                 }
             }

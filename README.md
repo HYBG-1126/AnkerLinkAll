@@ -36,7 +36,7 @@ open build/AnkerLinkAll.app
 ./scripts/package.sh
 ```
 
-脚本会部署 Qt 框架与 QML 模块（`macdeployqt -qmldir=qml`）、写入包内相对路径的 `qt.conf`、清理未使用的虚拟键盘模块、ad-hoc 签名，并输出 `release/AnkerLinkAll-<版本>-arm64.dmg`。
+脚本会部署 Qt 框架与 QML 模块（`macdeployqt -qmldir=qml`）、写入包内相对路径的 `qt.conf`、清理未使用的虚拟键盘模块、ad-hoc 签名，并输出 `release/AnkerLinkAll-v<版本>-macOS<最低系统>+-<架构>.dmg`（如 `AnkerLinkAll-v0.1.0-macOS27.2+-AppleSilicon-arm64.dmg`）。最低系统版本取包内所有二进制的最高 `minos`，并同步写入 `LSMinimumSystemVersion`。
 
 安装包使用 ad-hoc 签名，适合本机与内部分发。首次启动如被 Gatekeeper 拦截，可右键应用选择「打开」，或执行：
 

@@ -23,6 +23,8 @@ class ChargerController : public QObject
     Q_PROPERTY(bool sessionReady READ sessionReady NOTIFY stateChanged)
     Q_PROPERTY(bool reconnecting READ reconnecting NOTIFY stateChanged)
     Q_PROPERTY(bool hasDevice READ hasDevice NOTIFY deviceChanged)
+    Q_PROPERTY(bool paired READ paired NOTIFY deviceChanged)
+    Q_PROPERTY(bool scanning READ scanning NOTIFY stateChanged)
     Q_PROPERTY(QString deviceName READ deviceName NOTIFY deviceChanged)
     Q_PROPERTY(QString displayName READ displayName NOTIFY deviceChanged)
     Q_PROPERTY(QString serial READ serial NOTIFY deviceChanged)
@@ -51,6 +53,8 @@ public:
     bool sessionReady() const { return m_session.isReady(); }
     bool reconnecting() const { return m_reconnecting; }
     bool hasDevice() const { return m_hasDevice; }
+    bool paired() const { return !m_forgotten; }
+    bool scanning() const { return m_state == QLatin1String("scanning"); }
     QString deviceName() const;
     QString displayName() const;
     QString serial() const { return m_identity.serial; }
@@ -136,6 +140,7 @@ private:
 
     bool m_permissionGranted = false;
     bool m_userDisconnected = false;
+    bool m_forgotten = false;
     bool m_reconnecting = false;
     int m_missCount = 0;
     QString m_state = QStringLiteral("idle");

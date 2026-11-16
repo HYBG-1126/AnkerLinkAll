@@ -29,6 +29,7 @@ constexpr int kHistoryLimit = 48;
 
 const char *kRememberedIdKey = "bluetooth/rememberedPeripheral";
 const char *kRememberedNameKey = "bluetooth/rememberedName";
+const char *kForgottenKey = "bluetooth/forgotten";
 
 QVariant optionalValue(const std::optional<double> &value)
 {
@@ -58,6 +59,7 @@ QFile *logFile()
 ChargerController::ChargerController(QObject *parent)
     : QObject(parent)
 {
+    m_forgotten = QSettings().value(kForgottenKey).toBool();
     m_retryTimer.setSingleShot(true);
     connect(&m_retryTimer, &QTimer::timeout, this, &ChargerController::scan);
 
@@ -137,6 +139,10 @@ ChargerController::~ChargerController()
 void ChargerController::start()
 {
     log(QStringLiteral("AnkerLinkAll (Qt) 启动"));
+    if (m_forgotten) {
+        m_userDisconnected = true;
+        setState(QStringLiteral("idle"), QStringLiteral("尚未添加设备"));
+    }
     requestPermissionThenScan();
 }
 
@@ -207,6 +213,10 @@ void ChargerController::startDiscovery()
         auto windowEnded = [this] {
             if (m_controller || m_userDisconnected)
                 return;
+            if (m_forgotten) {
+                setState(QStringLiteral("idle"), QStringLiteral("搜索结束"));
+                return;
+            }
             log(QStringLiteral("扫描窗口结束，未发现充电器"));
             scheduleRetry(QStringLiteral("未发现充电器"));
         };
@@ -262,7 +272,7 @@ void ChargerController::onDeviceDiscovered(const QBluetoothDeviceInfo &info)
             m_nearby.append(info);
         emit nearbyChanged();
     }
-    if (m_controller || !looksLikeA2687(info))
+    if (m_controller || m_forgotten || !looksLikeA2687(info))
         return;
     log(QStringLiteral("匹配到 %1（RSSI %2）").arg(info.name()).arg(info.rssi()));
     m_agent->stop();
@@ -661,6 +671,11 @@ void ChargerController::connectToNearby(const QString &uuid)
         m_retryTimer.stop();
         if (m_agent)
             m_agent->stop();
+        if (m_forgotten) {
+            m_forgotten = false;
+            QSettings().remove(kForgottenKey);
+            emit deviceChanged();
+        }
         remember(info);
         m_targetRemembered = false;
         connectTo(info, QStringLiteral("手动选择"));
@@ -687,7 +702,13 @@ void ChargerController::forgetDevice()
     QSettings settings;
     settings.remove(kRememberedIdKey);
     settings.remove(kRememberedNameKey);
-    log(QStringLiteral("已忘记设备"));
+    settings.setValue(kForgottenKey, true);
+    m_forgotten = true;
+    m_nearby.clear();
+    emit nearbyChanged();
+    emit deviceChanged();
+    setState(QStringLiteral("idle"), QStringLiteral("设备已删除"));
+    log(QStringLiteral("已删除设备"));
 }
 
 bool ChargerController::setPortPower(int portIndex, bool on)

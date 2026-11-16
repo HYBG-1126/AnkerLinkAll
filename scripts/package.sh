@@ -23,6 +23,20 @@ rm -f "$APP"/Contents/PlugIns/quick/libqtvkb*.dylib
 rm -f "$APP/Contents/PlugIns/quick/libvirtualkeyboardplugin.dylib"
 rm -f "$APP/Contents/PlugIns/platforminputcontexts/libqtvirtualkeyboardplugin.dylib"
 
+# 包内 Homebrew 依赖常按构建机系统编译，最低系统版本取所有 Mach-O 的最大 minos，避免在旧系统上启动即崩溃
+MIN_OS=$(find "$APP" -type f -print0 | xargs -0 file | awk -F: '/Mach-O/{print $1}' \
+  | while read -r bin; do vtool -show-build "$bin" 2>/dev/null | awk '/minos/{print $2; exit}'; done \
+  | sort -V | tail -1)
+/usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion ${MIN_OS}" "$APP/Contents/Info.plist"
+
+ARCHS=$(lipo -archs "$APP/Contents/MacOS/AnkerLinkAll")
+case "$ARCHS" in
+  arm64) ARCH_LABEL="AppleSilicon-arm64" ;;
+  x86_64) ARCH_LABEL="Intel-x86_64" ;;
+  *) ARCH_LABEL="Universal" ;;
+esac
+DMG="release/AnkerLinkAll-v${VERSION}-macOS${MIN_OS}+-${ARCH_LABEL}.dmg"
+
 codesign --force --deep --sign - "$APP"
 
 STAGE=$(mktemp -d)
@@ -30,6 +44,6 @@ trap 'rm -rf "$STAGE"' EXIT
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 mkdir -p release
-hdiutil create -volname AnkerLinkAll -srcfolder "$STAGE" -ov -format UDZO \
-  "release/AnkerLinkAll-${VERSION}-arm64.dmg" >/dev/null
-echo "release/AnkerLinkAll-${VERSION}-arm64.dmg"
+hdiutil create -volname "AnkerLinkAll ${VERSION}" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+echo "$DMG"
+echo "  版本：${VERSION}  架构：${ARCH_LABEL}  系统：macOS ${MIN_OS} 及以上"

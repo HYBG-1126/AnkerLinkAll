@@ -67,7 +67,10 @@ ApplicationWindow {
     }
     Component {
         id: settingsPage
-        SettingsPage { onBack: stack.pop() }
+        SettingsPage {
+            onBack: stack.pop()
+            onDeviceRemoved: stack.pop(null)
+        }
     }
     Component {
         id: logsPage
