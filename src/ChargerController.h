@@ -32,6 +32,7 @@ class ChargerController : public QObject
     Q_PROPERTY(QVariantList ports READ ports NOTIFY telemetryChanged)
     Q_PROPERTY(QVariant totalPower READ totalPower NOTIFY telemetryChanged)
     Q_PROPERTY(QVariantList history READ history NOTIFY telemetryChanged)
+    Q_PROPERTY(QVariantList portHistory READ portHistory NOTIFY telemetryChanged)
     Q_PROPERTY(int chargingMode READ chargingMode NOTIFY telemetryChanged)
     Q_PROPERTY(bool hasTelemetry READ hasTelemetry NOTIFY telemetryChanged)
     Q_PROPERTY(QVariantList nearbyDevices READ nearbyDevices NOTIFY nearbyChanged)
@@ -58,6 +59,12 @@ public:
     QVariantList ports() const;
     QVariant totalPower() const;
     QVariantList history() const { return m_history; }
+    QVariantList portHistory() const {
+        QVariantList out;
+        for (const auto &h : m_portHistory)
+            out.append(QVariant(h));
+        return out;
+    }
     int chargingMode() const { return m_chargingMode; }
     bool hasTelemetry() const { return m_hasTelemetry; }
     QVariantList nearbyDevices() const;
@@ -137,6 +144,7 @@ private:
     int m_chargingMode = -1;
     bool m_hasTelemetry = false;
     QVariantList m_history;
+    QVariantList m_portHistory[Anker::PortCount];
     QList<QBluetoothDeviceInfo> m_nearby;
     QStringList m_logs;
 };

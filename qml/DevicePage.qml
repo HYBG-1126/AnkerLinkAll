@@ -8,6 +8,7 @@ Item {
     signal openBack()
     signal openSettings()
     signal openLogs()
+    signal openRealtime()
 
     property int selectedPort: 0
     // 固件约每 60 秒主动断开一次，重连宽限期内保持设备视图与最近数据
@@ -301,6 +302,16 @@ Item {
                     }
                 }
                 Item { Layout.fillWidth: true }
+                Text {
+                    text: "›"
+                    color: App.sub
+                    font.pixelSize: 18
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: page.openRealtime()
+                }
             }
 
             Card {

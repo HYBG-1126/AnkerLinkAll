@@ -468,6 +468,8 @@ void ChargerController::clearDeviceData()
     m_chargingMode = -1;
     m_hasTelemetry = false;
     m_history.clear();
+    for (auto &h : m_portHistory)
+        h.clear();
     emit deviceChanged();
     emit telemetryChanged();
     emit stateChanged();
@@ -518,6 +520,11 @@ void ChargerController::applyTelemetry(const RealtimeUpdate &update)
         m_history.append(*update.totalPower);
         while (m_history.size() > kHistoryLimit)
             m_history.removeFirst();
+        for (int i = 0; i < PortCount; ++i) {
+            m_portHistory[i].append(m_ports[i].power.value_or(0));
+            while (m_portHistory[i].size() > kHistoryLimit)
+                m_portHistory[i].removeFirst();
+        }
     }
     if (hasPortPatch || update.totalPower)
         m_hasTelemetry = true;

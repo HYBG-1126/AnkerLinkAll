@@ -33,6 +33,7 @@ qt_add_qml_module(AnkerLinkAll
         qml/ProfilePage.qml
         qml/DevicePage.qml
         qml/SettingsPage.qml
+        qml/RealtimePage.qml
         qml/LogsPage.qml
         qml/DeviceCables.qml
         qml/Icon.qml

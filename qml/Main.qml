@@ -58,7 +58,12 @@ ApplicationWindow {
             onOpenBack: stack.pop()
             onOpenSettings: stack.push(settingsPage)
             onOpenLogs: stack.push(logsPage)
+            onOpenRealtime: stack.push(realtimePage)
         }
+    }
+    Component {
+        id: realtimePage
+        RealtimePage { onBack: stack.pop() }
     }
     Component {
         id: settingsPage
