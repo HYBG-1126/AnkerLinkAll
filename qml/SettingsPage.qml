@@ -176,7 +176,7 @@ Item {
             }
 
             ListRow {
-                label: "退出 AnkerLinkAll"
+                label: "退出 AnkerLinker"
                 labelColor: App.inkSoft
                 showDivider: false
                 onClicked: Window.window.quitRequested()

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(AnkerLinkAll VERSION 0.1.0 LANGUAGES CXX OBJCXX)
+project(AnkerLinker VERSION 0.1.0 LANGUAGES CXX OBJCXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,7 +11,7 @@ qt_standard_project_setup(REQUIRES 6.5)
 
 set(OPENSSL_ROOT /opt/homebrew/opt/openssl@3 CACHE PATH "OpenSSL 3 prefix")
 
-qt_add_executable(AnkerLinkAll MACOSX_BUNDLE
+qt_add_executable(AnkerLinker MACOSX_BUNDLE
     src/main.cpp
     src/AnkerCrypto.cpp src/AnkerCrypto.h
     src/AnkerProtocol.cpp src/AnkerProtocol.h
@@ -23,8 +23,8 @@ qt_add_executable(AnkerLinkAll MACOSX_BUNDLE
 
 set_source_files_properties(qml/App.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
-qt_add_qml_module(AnkerLinkAll
-    URI AnkerLinkAll
+qt_add_qml_module(AnkerLinker
+    URI AnkerLinker
     VERSION 1.0
     QML_FILES
         qml/Main.qml
@@ -55,19 +55,19 @@ qt_add_qml_module(AnkerLinkAll
 
 set_source_files_properties(assets/icon.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 
-set_target_properties(AnkerLinkAll PROPERTIES
-    OUTPUT_NAME AnkerLinkAll
+set_target_properties(AnkerLinker PROPERTIES
+    OUTPUT_NAME AnkerLinker
     MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Info.plist.in
-    MACOSX_BUNDLE_GUI_IDENTIFIER com.hybg.anker-link-all.qt
-    MACOSX_BUNDLE_BUNDLE_NAME AnkerLinkAll
+    MACOSX_BUNDLE_GUI_IDENTIFIER com.hybg.anker-linker
+    MACOSX_BUNDLE_BUNDLE_NAME AnkerLinker
     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
     MACOSX_BUNDLE_ICON_FILE icon.icns
 )
 
-target_include_directories(AnkerLinkAll PRIVATE ${OPENSSL_ROOT}/include)
-target_compile_definitions(AnkerLinkAll PRIVATE APP_VERSION="${PROJECT_VERSION}")
-target_link_libraries(AnkerLinkAll PRIVATE
+target_include_directories(AnkerLinker PRIVATE ${OPENSSL_ROOT}/include)
+target_compile_definitions(AnkerLinker PRIVATE APP_VERSION="${PROJECT_VERSION}")
+target_link_libraries(AnkerLinker PRIVATE
     Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Bluetooth Qt6::Svg
     ${OPENSSL_ROOT}/lib/libcrypto.a
     "-framework AppKit"

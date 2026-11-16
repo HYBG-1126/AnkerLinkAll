@@ -11,6 +11,7 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QScreen>
+#include <QSettings>
 #include <QSystemTrayIcon>
 #include <QTimer>
 
@@ -36,38 +37,55 @@ void showPanel(QQuickWindow *window, const QSystemTrayIcon &tray)
 
 } // namespace
 
+// 项目由 AnkerLinkAll 改名而来，首次启动时沿用旧偏好（记住的充电器、自定义名称等）
+static void migrateLegacySettings()
+{
+    QSettings current;
+    const QString flag = QStringLiteral("migration/fromAnkerLinkAll");
+    if (current.value(flag).toBool())
+        return;
+    QSettings legacy(QStringLiteral("hybg.com"), QStringLiteral("AnkerLinkAll"));
+    legacy.setFallbacksEnabled(false);
+    for (const QString &key : legacy.allKeys()) {
+        if (!current.contains(key))
+            current.setValue(key, legacy.value(key));
+    }
+    current.setValue(flag, true);
+}
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
-    QApplication::setApplicationName(QStringLiteral("AnkerLinkAll"));
+    QApplication::setApplicationName(QStringLiteral("AnkerLinker"));
     QApplication::setApplicationVersion(QStringLiteral(APP_VERSION));
-    QApplication::setOrganizationName(QStringLiteral("AnkerLinkAll"));
+    QApplication::setOrganizationName(QStringLiteral("AnkerLinker"));
     QApplication::setOrganizationDomain(QStringLiteral("hybg.com"));
     QApplication::setQuitOnLastWindowClosed(false);
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
-    QLockFile lock(QDir::tempPath() + QStringLiteral("/AnkerLinkAll-qt.lock"));
+    QLockFile lock(QDir::tempPath() + QStringLiteral("/AnkerLinker-qt.lock"));
     lock.setStaleLockTime(0);
     if (!lock.tryLock(100))
         return 0;
 
+    migrateLegacySettings();
     ChargerController charger;
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("charger"), &charger);
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
                      [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
-    engine.loadFromModule("AnkerLinkAll", "Main");
+    engine.loadFromModule("AnkerLinker", "Main");
     if (engine.rootObjects().isEmpty())
         return 1;
     auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().constFirst());
 
     QSystemTrayIcon tray;
     QIcon icon;
-    icon.addFile(QStringLiteral(":/qt/qml/AnkerLinkAll/assets/trayTemplate.png"));
-    icon.addFile(QStringLiteral(":/qt/qml/AnkerLinkAll/assets/trayTemplate@2x.png"));
+    icon.addFile(QStringLiteral(":/qt/qml/AnkerLinker/assets/trayTemplate.png"));
+    icon.addFile(QStringLiteral(":/qt/qml/AnkerLinker/assets/trayTemplate@2x.png"));
     icon.setIsMask(true);
     tray.setIcon(icon);
-    tray.setToolTip(QStringLiteral("AnkerLinkAll"));
+    tray.setToolTip(QStringLiteral("AnkerLinker"));
 
     const bool pinned = qEnvironmentVariableIsSet("ANKER_PIN");
     // 点击托盘图标时面板会先失焦隐藏，避免紧接着的点击事件又把它重新打开
@@ -87,7 +105,7 @@ int main(int argc, char *argv[])
     QObject::connect(window, SIGNAL(quitRequested()), &app, SLOT(quit()));
 
     auto updateTooltip = [&] {
-        QString text = QStringLiteral("AnkerLinkAll");
+        QString text = QStringLiteral("AnkerLinker");
         if (charger.sessionReady() && charger.totalPower().isValid())
             text += QStringLiteral(" · %1 W").arg(charger.totalPower().toDouble(), 0, 'f', 1);
         else if (!charger.statusText().isEmpty())

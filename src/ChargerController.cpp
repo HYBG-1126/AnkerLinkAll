@@ -46,7 +46,7 @@ QFile *logFile()
     static QFile *file = [] {
         const QString dir = QDir::homePath() + QStringLiteral("/Library/Logs");
         QDir().mkpath(dir);
-        auto *f = new QFile(dir + QStringLiteral("/AnkerLinkAll-qt.log"));
+        auto *f = new QFile(dir + QStringLiteral("/AnkerLinker-qt.log"));
         if (f->exists() && f->size() > 2 * 1024 * 1024)
             f->remove();
         f->open(QIODevice::Append | QIODevice::Text);
@@ -138,7 +138,7 @@ ChargerController::~ChargerController()
 
 void ChargerController::start()
 {
-    log(QStringLiteral("AnkerLinkAll (Qt) 启动"));
+    log(QStringLiteral("AnkerLinker (Qt) 启动"));
     if (m_forgotten) {
         m_userDisconnected = true;
         setState(QStringLiteral("idle"), QStringLiteral("尚未添加设备"));
@@ -160,13 +160,13 @@ void ChargerController::requestPermissionThenScan()
                 scan();
             } else {
                 setState(QStringLiteral("denied"),
-                         QStringLiteral("未获得蓝牙权限，请在“系统设置 > 隐私与安全性 > 蓝牙”中允许 AnkerLinkAll"));
+                         QStringLiteral("未获得蓝牙权限，请在“系统设置 > 隐私与安全性 > 蓝牙”中允许 AnkerLinker"));
             }
         });
         return;
     case Qt::PermissionStatus::Denied:
         setState(QStringLiteral("denied"),
-                 QStringLiteral("未获得蓝牙权限，请在“系统设置 > 隐私与安全性 > 蓝牙”中允许 AnkerLinkAll"));
+                 QStringLiteral("未获得蓝牙权限，请在“系统设置 > 隐私与安全性 > 蓝牙”中允许 AnkerLinker"));
         return;
     case Qt::PermissionStatus::Granted:
         break;
@@ -252,15 +252,15 @@ bool ChargerController::looksLikeA2687(const QBluetoothDeviceInfo &info) const
     if (info.serviceIds().contains(kAdvertisedUuid))
         return true;
     const QString name = info.name().toLower();
-    return name == QLatin1String("charging") || name.startsWith(QLatin1String("ashd"))
-           || name.contains(QLatin1String("anker")) || name.contains(QLatin1String("a2687"));
+    return name.startsWith(QLatin1String("ashd")) || name.contains(QLatin1String("anker"))
+           || name.contains(QLatin1String("a2687"));
 }
 
 void ChargerController::onDeviceDiscovered(const QBluetoothDeviceInfo &info)
 {
     if (!(info.coreConfigurations() & QBluetoothDeviceInfo::LowEnergyCoreConfiguration))
         return;
-    if (!info.name().isEmpty()) {
+    if (!info.name().isEmpty() && looksLikeA2687(info)) {
         bool replaced = false;
         for (auto &known : m_nearby) {
             if (known.deviceUuid() == info.deviceUuid()) {
@@ -630,13 +630,21 @@ QVariant ChargerController::totalPower() const
 
 QVariantList ChargerController::nearbyDevices() const
 {
+    QSettings settings;
+    const QString remembered = settings.value(kRememberedIdKey).toString();
     QVariantList list;
     for (const auto &info : m_nearby) {
+        const QString uuid = info.deviceUuid().toString(QUuid::WithoutBraces);
+        QString name = settings.value(QStringLiteral("device/customName/") + uuid).toString();
+        if (name.isEmpty() && uuid == remembered)
+            name = m_customName;
+        if (name.isEmpty())
+            name = QStringLiteral("160W Prime Charger");
         list.append(QVariantMap{
-            {QStringLiteral("name"), info.name()},
-            {QStringLiteral("uuid"), info.deviceUuid().toString(QUuid::WithoutBraces)},
+            {QStringLiteral("name"), name},
+            {QStringLiteral("advertisedName"), info.name()},
+            {QStringLiteral("uuid"), uuid},
             {QStringLiteral("rssi"), info.rssi()},
-            {QStringLiteral("anker"), looksLikeA2687(info)},
         });
     }
     return list;

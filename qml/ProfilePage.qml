@@ -55,7 +55,7 @@ Item {
                     Image {
                         anchors.centerIn: parent
                         width: 30; height: 30
-                        source: "qrc:/qt/qml/AnkerLinkAll/assets/anker-logo.svg"
+                        source: "qrc:/qt/qml/AnkerLinker/assets/anker-logo.svg"
                         fillMode: Image.PreserveAspectFit
                         smooth: true
                     }
@@ -65,7 +65,7 @@ Item {
                     Layout.fillWidth: true
                     spacing: 3
                     Text {
-                        text: "AnkerLinkAll 用户"
+                        text: "AnkerLinker 用户"
                         color: App.ink
                         font.pixelSize: 18
                         font.weight: Font.DemiBold
@@ -120,7 +120,7 @@ Item {
                     anchors.rightMargin: 10
                     anchors.verticalCenter: parent.verticalCenter
                     width: 84; height: 102
-                    source: "qrc:/qt/qml/AnkerLinkAll/assets/device-a2687-thumb.png"
+                    source: "qrc:/qt/qml/AnkerLinker/assets/device-a2687-thumb.png"
                     fillMode: Image.PreserveAspectFit
                     smooth: true
                     mipmap: true
@@ -151,7 +151,7 @@ Item {
 
             ListRow {
                 Layout.fillWidth: true
-                label: "退出 AnkerLinkAll"
+                label: "退出 AnkerLinker"
                 labelColor: App.inkSoft
                 showDivider: false
                 onClicked: Window.window.quitRequested()
@@ -179,14 +179,14 @@ Item {
                 Image {
                     anchors.centerIn: parent
                     width: 30; height: 30
-                    source: "qrc:/qt/qml/AnkerLinkAll/assets/anker-logo.svg"
+                    source: "qrc:/qt/qml/AnkerLinker/assets/anker-logo.svg"
                     fillMode: Image.PreserveAspectFit
                     smooth: true
                 }
             }
             Text {
                 Layout.alignment: Qt.AlignHCenter
-                text: "AnkerLinkAll 安克万连"
+                text: "AnkerLinker 安克万连"
                 color: App.ink
                 font.pixelSize: 16
                 font.weight: Font.DemiBold

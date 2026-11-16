@@ -4,8 +4,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 QT_PREFIX="${QT_PREFIX:-/opt/homebrew/opt/qt}"
-VERSION=$(sed -n 's/^project(AnkerLinkAll VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
-APP=build/AnkerLinkAll.app
+VERSION=$(sed -n 's/^project(AnkerLinker VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+APP=build/AnkerLinker.app
 
 "$QT_PREFIX/bin/macdeployqt" "$APP" -qmldir=qml -always-overwrite
 
@@ -29,13 +29,13 @@ MIN_OS=$(find "$APP" -type f -print0 | xargs -0 file | awk -F: '/Mach-O/{print $
   | sort -V | tail -1)
 /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion ${MIN_OS}" "$APP/Contents/Info.plist"
 
-ARCHS=$(lipo -archs "$APP/Contents/MacOS/AnkerLinkAll")
+ARCHS=$(lipo -archs "$APP/Contents/MacOS/AnkerLinker")
 case "$ARCHS" in
   arm64) ARCH_LABEL="AppleSilicon-arm64" ;;
   x86_64) ARCH_LABEL="Intel-x86_64" ;;
   *) ARCH_LABEL="Universal" ;;
 esac
-DMG="release/AnkerLinkAll-v${VERSION}-macOS${MIN_OS}+-${ARCH_LABEL}.dmg"
+DMG="release/AnkerLinker-v${VERSION}-macOS${MIN_OS}+-${ARCH_LABEL}.dmg"
 
 codesign --force --deep --sign - "$APP"
 
@@ -44,6 +44,6 @@ trap 'rm -rf "$STAGE"' EXIT
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 mkdir -p release
-hdiutil create -volname "AnkerLinkAll ${VERSION}" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+hdiutil create -volname "AnkerLinker ${VERSION}" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
 echo "$DMG"
 echo "  版本：${VERSION}  架构：${ARCH_LABEL}  系统：macOS ${MIN_OS} 及以上"

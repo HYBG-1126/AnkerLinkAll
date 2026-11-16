@@ -13,7 +13,7 @@ Item {
         delegate: Image {
             required property string modelData
             anchors.fill: parent
-            source: "qrc:/qt/qml/AnkerLinkAll/assets/cable-" + modelData.toLowerCase() + ".png"
+            source: "qrc:/qt/qml/AnkerLinker/assets/cable-" + modelData.toLowerCase() + ".png"
             fillMode: Image.PreserveAspectFit
             smooth: true
             mipmap: true

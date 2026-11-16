@@ -15,7 +15,7 @@
     <key>CFBundleName</key>
     <string>${MACOSX_BUNDLE_BUNDLE_NAME}</string>
     <key>CFBundleDisplayName</key>
-    <string>AnkerLinkAll</string>
+    <string>AnkerLinker</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -29,6 +29,6 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>AnkerLinkAll 需要使用蓝牙连接安克充电器，读取端口功率并下发控制指令。</string>
+    <string>AnkerLinker 需要使用蓝牙连接安克充电器，读取端口功率并下发控制指令。</string>
 </dict>
 </plist>

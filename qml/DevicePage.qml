@@ -86,7 +86,7 @@ Item {
                     Image {
                         id: product
                         anchors.fill: parent
-                        source: "qrc:/qt/qml/AnkerLinkAll/assets/device-a2687.png"
+                        source: "qrc:/qt/qml/AnkerLinker/assets/device-a2687.png"
                         fillMode: Image.PreserveAspectFit
                         smooth: true
                         mipmap: true

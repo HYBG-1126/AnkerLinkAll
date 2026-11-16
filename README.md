@@ -1,4 +1,4 @@
-# AnkerLinkAll · 安克万连
+# AnkerLinker · 安克万连
 
 基于蓝牙发现并控制附近安克（Anker）设备的 macOS 菜单栏应用，使用 **C++ / Qt 6 + QML** 实现。
 
@@ -18,7 +18,7 @@
 | 运行平台 | macOS Apple Silicon（arm64） |
 | 形态 | `LSUIElement` 菜单栏应用，不占用 Dock |
 | 面板 | 无边框浮动窗口，锚定在菜单栏图标下方 |
-| 单实例 | 通过 `/tmp/AnkerLinkAll-qt.lock` 加锁，重复启动会静默退出 |
+| 单实例 | 通过 `/tmp/AnkerLinker-qt.lock` 加锁，重复启动会静默退出 |
 
 ## 构建与运行
 
@@ -27,7 +27,7 @@
 ```bash
 /opt/homebrew/opt/qt/bin/qt-cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-open build/AnkerLinkAll.app
+open build/AnkerLinker.app
 ```
 
 ## 打包安装包
@@ -36,12 +36,12 @@ open build/AnkerLinkAll.app
 ./scripts/package.sh
 ```
 
-脚本会部署 Qt 框架与 QML 模块（`macdeployqt -qmldir=qml`）、写入包内相对路径的 `qt.conf`、清理未使用的虚拟键盘模块、ad-hoc 签名，并输出 `release/AnkerLinkAll-v<版本>-macOS<最低系统>+-<架构>.dmg`（如 `AnkerLinkAll-v0.1.0-macOS27.2+-AppleSilicon-arm64.dmg`）。最低系统版本取包内所有二进制的最高 `minos`，并同步写入 `LSMinimumSystemVersion`。
+脚本会部署 Qt 框架与 QML 模块（`macdeployqt -qmldir=qml`）、写入包内相对路径的 `qt.conf`、清理未使用的虚拟键盘模块、ad-hoc 签名，并输出 `release/AnkerLinker-v<版本>-macOS<最低系统>+-<架构>.dmg`（如 `AnkerLinker-v0.1.0-macOS27.2+-AppleSilicon-arm64.dmg`）。最低系统版本取包内所有二进制的最高 `minos`，并同步写入 `LSMinimumSystemVersion`。
 
 安装包使用 ad-hoc 签名，适合本机与内部分发。首次启动如被 Gatekeeper 拦截，可右键应用选择「打开」，或执行：
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/AnkerLinkAll.app
+xattr -dr com.apple.quarantine /Applications/AnkerLinker.app
 ```
 
 ## 界面结构
@@ -93,7 +93,7 @@ xattr -dr com.apple.quarantine /Applications/AnkerLinkAll.app
 ## 连接排障
 
 - **设备被占用**：充电器同一时间只能被一个主机连接。若手机安克 App 或其他电脑仍在连接，先断开再重试。
-- **系统权限**：首次连接时 macOS 会请求蓝牙权限。若曾拒绝，请到「系统设置 → 隐私与安全性 → 蓝牙」重新允许 AnkerLinkAll。
+- **系统权限**：首次连接时 macOS 会请求蓝牙权限。若曾拒绝，请到「系统设置 → 隐私与安全性 → 蓝牙」重新允许 AnkerLinker。
 - **旧实例**：更新应用前请完全退出旧版本，否则单实例锁会让新进程直接退出。
 - **设备名称**：安克设备的名称可能是序列号（如 `ASHDPPE1G19600139`），界面统一显示为 `160W Prime Charger`。
 

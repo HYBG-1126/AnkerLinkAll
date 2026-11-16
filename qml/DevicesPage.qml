@@ -88,7 +88,7 @@ Item {
                     Image {
                         Layout.preferredWidth: 80
                         Layout.preferredHeight: 98
-                        source: "qrc:/qt/qml/AnkerLinkAll/assets/device-a2687-thumb.png"
+                        source: "qrc:/qt/qml/AnkerLinker/assets/device-a2687-thumb.png"
                         fillMode: Image.PreserveAspectFit
                         smooth: true
                         mipmap: true

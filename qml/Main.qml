@@ -9,7 +9,7 @@ ApplicationWindow {
     width: 380
     height: 660
     visible: false
-    title: "AnkerLinkAll"
+    title: "AnkerLinker"
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.NoDropShadowWindowHint
     color: "transparent"
 
