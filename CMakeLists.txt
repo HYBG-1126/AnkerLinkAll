@@ -44,6 +44,9 @@ qt_add_qml_module(AnkerLinkAll
     RESOURCES
         assets/anker-logo.svg
         assets/device-160w-empty.png
+        assets/cable-c1.png
+        assets/cable-c2.png
+        assets/cable-c3.png
         assets/trayTemplate.png
         assets/trayTemplate@2x.png
 )
