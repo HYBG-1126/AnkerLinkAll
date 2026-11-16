@@ -29,6 +29,7 @@ class ChargerController : public QObject
     Q_PROPERTY(QString firmware READ firmware NOTIFY deviceChanged)
     Q_PROPERTY(QString mac READ mac NOTIFY deviceChanged)
     Q_PROPERTY(QString model READ model NOTIFY deviceChanged)
+    Q_PROPERTY(QString customName READ customName NOTIFY deviceChanged)
     Q_PROPERTY(QVariantList ports READ ports NOTIFY telemetryChanged)
     Q_PROPERTY(QVariant totalPower READ totalPower NOTIFY telemetryChanged)
     Q_PROPERTY(QVariantList history READ history NOTIFY telemetryChanged)
@@ -56,6 +57,7 @@ public:
     QString firmware() const { return m_identity.firmware; }
     QString mac() const { return m_identity.mac; }
     QString model() const { return m_hasDevice ? QStringLiteral("A2687") : QString(); }
+    QString customName() const { return m_customName; }
     QVariantList ports() const;
     QVariant totalPower() const;
     QVariantList history() const { return m_history; }
@@ -75,6 +77,7 @@ public:
     Q_INVOKABLE void connectToNearby(const QString &uuid);
     Q_INVOKABLE void disconnectDevice();
     Q_INVOKABLE void forgetDevice();
+    Q_INVOKABLE void setCustomName(const QString &name);
     Q_INVOKABLE bool setPortPower(int portIndex, bool on);
     Q_INVOKABLE bool setPortTimer(int portIndex, int seconds);
     Q_INVOKABLE bool setChargingMode(int mode);
@@ -109,6 +112,8 @@ private:
     void setState(const QString &state, const QString &text);
     void log(const QString &message);
     void remember(const QBluetoothDeviceInfo &info);
+    QString customNameKey() const;
+    void loadCustomName();
 
     AnkerSession m_session;
     Anker::FrameStreamDecoder m_decoder;
@@ -138,6 +143,7 @@ private:
 
     bool m_hasDevice = false;
     QString m_advertisedName;
+    QString m_customName;
     Anker::DeviceIdentity m_identity;
     Anker::PortTelemetry m_ports[Anker::PortCount];
     std::optional<double> m_totalPower;

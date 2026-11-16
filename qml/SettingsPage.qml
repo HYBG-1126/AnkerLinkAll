@@ -115,7 +115,13 @@ Item {
                     ListRow {
                         label: "设备名称"
                         value: charger.hasDevice ? App.textOr(charger.displayName) : "—"
-                        clickable: false
+                        onClicked: {
+                            if (!charger.hasDevice) {
+                                App.toast("请先连接设备")
+                                return
+                            }
+                            renameDialog.open()
+                        }
                     }
                     ListRow {
                         label: "SN"
@@ -271,6 +277,63 @@ Item {
                         const next = Math.round(brightnessSlider.value)
                         brightnessPopup.close()
                         page.sendIndexSetting("brightness", next, () => App.prefs.brightness = next)
+                    }
+                }
+            }
+        }
+    }
+
+    Popup {
+        id: renameDialog
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: 300
+        padding: 20
+        modal: true
+        background: Rectangle { radius: 20; color: App.surface }
+        onOpened: nameField.text = charger.customName ? charger.customName : charger.displayName
+        onClosed: nameField.focus = false
+        contentItem: ColumnLayout {
+            spacing: 14
+            Text {
+                text: "重命名设备"
+                color: App.ink
+                font.pixelSize: 16
+                font.weight: Font.DemiBold
+                Layout.alignment: Qt.AlignHCenter
+            }
+            TextField {
+                id: nameField
+                Layout.fillWidth: true
+                placeholderText: "输入设备名称"
+                maximumLength: 30
+                color: App.ink
+                font.pixelSize: 14
+                background: Rectangle {
+                    radius: 10
+                    color: App.bg
+                    border.color: nameField.activeFocus ? App.accent : App.line
+                    border.width: 1
+                }
+            }
+            Text {
+                text: "名称仅保存在本机，不会同步到安克账号与设备"
+                color: App.sub
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                DialogButton { text: "取消"; onClicked: renameDialog.close() }
+                DialogButton {
+                    text: "保存"
+                    primary: true
+                    onClicked: {
+                        charger.setCustomName(nameField.text)
+                        renameDialog.close()
+                        App.toast(charger.customName ? "已保存设备名称" : "已恢复默认名称")
                     }
                 }
             }

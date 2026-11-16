@@ -101,6 +101,7 @@ ChargerController::ChargerController(QObject *parent)
             m_identity.firmware = identity.firmware;
         if (!identity.mac.isEmpty())
             m_identity.mac = identity.mac;
+        loadCustomName();
         emit deviceChanged();
     });
     connect(&m_session, &AnkerSession::telemetryReceived, this, &ChargerController::applyTelemetry);
@@ -179,6 +180,7 @@ void ChargerController::scan()
 
     QSettings settings;
     const QString remembered = settings.value(kRememberedIdKey).toString();
+    loadCustomName();
     if (!remembered.isEmpty()) {
         QBluetoothDeviceInfo info(QBluetoothUuid(remembered),
                                   settings.value(kRememberedNameKey).toString(), 0);
@@ -542,9 +544,51 @@ QString ChargerController::displayName() const
 {
     if (!m_hasDevice)
         return QString();
+    if (!m_customName.isEmpty())
+        return m_customName;
     if (model() == QLatin1String("A2687"))
         return QStringLiteral("160W Prime Charger");
     return deviceName();
+}
+
+QString ChargerController::customNameKey() const
+{
+    if (!m_identity.mac.isEmpty())
+        return m_identity.mac;
+    QSettings settings;
+    return settings.value(kRememberedIdKey).toString();
+}
+
+void ChargerController::loadCustomName()
+{
+    const QString key = customNameKey();
+    const QString name = key.isEmpty()
+            ? QString()
+            : QSettings().value(QStringLiteral("device/customName/") + key).toString();
+    if (name != m_customName) {
+        m_customName = name;
+        emit deviceChanged();
+    }
+}
+
+void ChargerController::setCustomName(const QString &name)
+{
+    const QString trimmed = name.trimmed();
+    const QString key = customNameKey();
+    if (key.isEmpty()) {
+        log(QStringLiteral("尚未连接过设备，无法保存自定义名称"));
+        return;
+    }
+    QSettings settings;
+    const QString storageKey = QStringLiteral("device/customName/") + key;
+    if (trimmed.isEmpty())
+        settings.remove(storageKey);
+    else
+        settings.setValue(storageKey, trimmed);
+    m_customName = trimmed;
+    log(trimmed.isEmpty() ? QStringLiteral("已恢复默认设备名称")
+                          : QStringLiteral("已重命名设备为 %1").arg(trimmed));
+    emit deviceChanged();
 }
 
 QVariantList ChargerController::ports() const
