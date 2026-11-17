@@ -197,7 +197,7 @@ Item {
                     width: parent.width
                     spacing: 0
                     Text {
-                        text: "附近的蓝牙设备"
+                        text: "附近的安克设备"
                         color: App.inkSoft
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
@@ -210,7 +210,8 @@ Item {
                             required property int index
                             icon: "bluetooth"
                             label: modelData.name
-                            labelColor: modelData.anker ? App.accentDeep : App.ink
+                            subtitle: modelData.advertisedName
+                            labelColor: App.accentDeep
                             value: modelData.rssi + " dBm"
                             showDivider: index < charger.nearbyDevices.length - 1
                             onClicked: {

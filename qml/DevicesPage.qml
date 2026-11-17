@@ -11,7 +11,7 @@ Item {
     property int tabIndex: 0
 
     readonly property bool online: charger.hasDevice && (charger.sessionReady || charger.reconnecting)
-    readonly property var nearbyChargers: charger.nearbyDevices.filter(device => device.anker)
+    readonly property var nearbyChargers: charger.nearbyDevices
 
     function openAddSheet() {
         charger.scanNow()
@@ -311,7 +311,8 @@ Item {
                     Layout.fillWidth: true
                     icon: "bluetooth"
                     label: modelData.name
-                    labelColor: modelData.anker ? App.accentDeep : App.ink
+                    subtitle: modelData.advertisedName
+                    labelColor: App.accentDeep
                     value: modelData.rssi + " dBm"
                     showDivider: false
                     onClicked: {

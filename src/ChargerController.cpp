@@ -638,11 +638,16 @@ QVariantList ChargerController::nearbyDevices() const
         QString name = settings.value(QStringLiteral("device/customName/") + uuid).toString();
         if (name.isEmpty() && uuid == remembered)
             name = m_customName;
+        const QString advertised = info.name().toLower();
+        const bool isA2687 = info.serviceUuids().contains(kAdvertisedUuid)
+                || info.serviceUuids().contains(kServiceUuid)
+                || advertised.startsWith(QLatin1String("ashd"))
+                || advertised.contains(QLatin1String("a2687"));
         if (name.isEmpty())
-            name = QStringLiteral("160W Prime Charger");
+            name = isA2687 ? QStringLiteral("160W Prime Charger") : info.name();
         list.append(QVariantMap{
             {QStringLiteral("name"), name},
-            {QStringLiteral("advertisedName"), info.name()},
+            {QStringLiteral("advertisedName"), name == info.name() ? QString() : info.name()},
             {QStringLiteral("uuid"), uuid},
             {QStringLiteral("rssi"), info.rssi()},
         });

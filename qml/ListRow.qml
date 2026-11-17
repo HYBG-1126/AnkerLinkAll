@@ -4,6 +4,7 @@ import QtQuick.Layouts
 Item {
     id: root
     property string label
+    property string subtitle
     property string value
     property string icon
     property bool clickable: true
@@ -12,7 +13,7 @@ Item {
     property color labelColor: App.ink
     signal clicked()
 
-    implicitHeight: 50
+    implicitHeight: subtitle !== "" ? 58 : 50
     Layout.fillWidth: true
 
     Rectangle {
@@ -33,13 +34,25 @@ Item {
             size: 20
             color: App.inkSoft
         }
-        Text {
-            text: root.label
-            color: root.labelColor
-            font.pixelSize: 14
-            font.weight: Font.Medium
+        ColumnLayout {
             Layout.fillWidth: true
-            elide: Text.ElideRight
+            spacing: 2
+            Text {
+                text: root.label
+                color: root.labelColor
+                font.pixelSize: 14
+                font.weight: Font.Medium
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+            }
+            Text {
+                visible: root.subtitle !== ""
+                text: root.subtitle
+                color: App.sub
+                font.pixelSize: 11
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+            }
         }
         Text {
             text: root.value
